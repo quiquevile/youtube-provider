@@ -1,0 +1,41 @@
+# Local agent instructions and environment metadata
+AGENTS.md
+.agents/
+.codex/
+.aws/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.egg-info/
+build/
+dist/
+
+# Test and coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Optional web tooling
+node_modules/
+
+# Local configuration, state and downloads
+.env
+.env.*
+!.env.example
+data/
+downloads/
+*.log
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
