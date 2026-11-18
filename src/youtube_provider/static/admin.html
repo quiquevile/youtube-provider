@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube Song Provider</title>
+<link rel="stylesheet" href="/static/admin.css">
+<script defer src="/static/admin.js"></script>
+<header><h1>YouTube Song Provider</h1><span>Local administration</span><button id="logout" type="button">Sign out</button></header>
+<main>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <section class="panel">
+    <h2>Profiles</h2>
+    <div class="row"><label>Selected profile <select id="profile-select"></select></label><button id="delete-profile" type="button" class="danger">Delete profile</button></div>
+    <form id="create-profile" class="row"><label>New profile ID <input id="new-slug" pattern="[a-z][a-z0-9-]{0,39}" placeholder="music-videos" required></label><label>Name <input id="new-name" required></label><button type="submit">Create profile</button></form>
+    <p>Provider base URL: <code id="base-url"></code></p>
+  </section>
+  <section class="panel">
+    <h2>Profile settings</h2>
+    <form id="profile-form">
+      <div class="grid"><label>Name <input id="profile-name" required></label><label>Output directory <input id="output-dir" required></label><label>Default search terms, comma separated <input id="search-terms"></label><label>Results per channel <input id="search-count" type="number" min="1" max="50" required></label></div>
+      <h3>Video quality</h3>
+      <div class="row"><label>Minimum <select id="min-height"></select></label><label>Maximum <select id="max-height"></select></label><label>Output format <select disabled><option>MP4</option></select></label></div>
+      <p>Drag resolutions to set preference. The first available target wins; higher source video is scaled down.</p>
+      <ol id="quality-order" class="sortable"></ol>
+      <h3>Allowed channels and parsing rules</h3>
+      <p>With no channels, any YouTube channel is allowed. When channels are listed, only their permanent IDs are accepted.</p>
+      <div id="channels"></div>
+      <button id="add-channel" type="button">Add channel</button>
+      <div class="actions"><button type="submit">Save profile</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Try metadata rules</h2>
+    <form id="preview-form" class="grid"><label>Video title <input id="preview-title" required></label><label>Channel <select id="preview-channel"></select></label><button type="submit">Preview artist and title</button></form>
+    <pre id="preview-result"></pre>
+  </section>
+  <section class="panel">
+    <h2>Client API keys</h2>
+    <p>Each key identifies one client. The secret is shown only when created.</p>
+    <form id="new-key" class="row"><label>Client label <input id="key-label" placeholder="Living room" required></label><button type="submit">Create key</button></form>
+    <p id="new-secret"></p><div id="keys"></div>
+  </section>
+  <section class="panel">
+    <h2>yt-dlp updates</h2>
+    <p id="update-status"></p>
+    <form id="update-config" class="row"><label>Channel <select id="update-channel"><option value="stable">Stable</option><option value="nightly">Nightly</option></select></label><label>Automatic interval (hours; 0 disables) <input id="update-interval" type="number" min="0" max="720" required></label><button type="submit">Save schedule</button><button id="run-update" type="button">Update now</button></form>
+  </section>
+  <section class="panel">
+    <h2>Admin password</h2>
+    <form id="password-form" class="row"><label>Current password <input id="password-current" type="password" required></label><label>New password <input id="password-new" type="password" minlength="12" required></label><button type="submit">Change password</button></form>
+  </section>
+</main>
