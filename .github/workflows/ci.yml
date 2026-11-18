@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  REGISTRY_IMAGE: quiquevile/youtube-provider
+  REGISTRY_IMAGE: karaokeman/youtube-provider
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -85,6 +85,24 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.pair }}
           cache-to: type=gha,mode=max,scope=${{ matrix.pair }}
+      - name: Smoke-test runtime image
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm --entrypoint sh "${REGISTRY_IMAGE}@${IMAGE_DIGEST}" -ec '
+            test "$(id -u)" = 10001
+            python -c "import yt_dlp, yt_dlp_ejs; from youtube_provider.model import Profile; assert Profile.model_validate"
+            python -m pip --version
+            node --version
+            ffmpeg -version >/dev/null
+            ffprobe -version >/dev/null
+            ffmpeg -hide_banner -loglevel error \
+              -f lavfi -i color=c=black:s=32x32:r=1 \
+              -f lavfi -i sine=frequency=440 -t 1 \
+              -c:v libx264 -c:a aac /tmp/smoke.mp4
+            test -s /tmp/smoke.mp4
+            youtube-song-provider --help >/dev/null
+          '
       - name: Export digest
         run: |
           mkdir -p /tmp/digests

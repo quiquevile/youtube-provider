@@ -1,17 +1,11 @@
 # syntax=docker/dockerfile:1
-FROM node:24-trixie-slim
+FROM node:24-alpine AS node-runtime
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/venv
-
-WORKDIR /app
-COPY pyproject.toml README.md ./
-COPY src ./src
-RUN /opt/venv/bin/pip install --no-cache-dir . \
-    && groupadd --system --gid 10001 provider \
-    && useradd --system --uid 10001 --gid provider --home /app provider \
+FROM alpine:3.24 AS runtime-base
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates ffmpeg libstdc++ python3 \
+    && addgroup -S -g 10001 provider \
+    && adduser -S -D -u 10001 -G provider -h /app provider \
     && mkdir -p /data /media \
     && chown provider:provider /data /media
 
@@ -21,6 +15,27 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     YSP_OUTPUT_ROOT=/media \
     YSP_API_HOST=0.0.0.0 \
     YSP_ADMIN_HOST=0.0.0.0
+WORKDIR /app
+
+FROM runtime-base AS dependencies
+RUN apk add --no-cache py3-pip \
+    && python3 -m venv /opt/venv \
+    && python -m pip install --no-cache-dir --upgrade 'pip>=26.2'
+COPY pyproject.toml ./
+RUN python3 -c 'import tomllib; from pathlib import Path; metadata = tomllib.loads(Path("pyproject.toml").read_text()); Path("/tmp/requirements.txt").write_text("\n".join(metadata["project"]["dependencies"]) + "\n")' \
+    && python -m pip install --no-cache-dir -r /tmp/requirements.txt
+
+FROM dependencies AS package
+COPY README.md LICENSE ./
+COPY src ./src
+RUN python -m pip wheel --no-deps --wheel-dir /tmp/wheels .
+
+FROM runtime-base
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=dependencies /opt/venv /opt/venv
+COPY --from=package /tmp/wheels/ /tmp/wheels/
+RUN python -m pip install --no-index --no-deps --no-cache-dir /tmp/wheels/*.whl \
+    && rm -rf /tmp/wheels
 
 USER provider
 EXPOSE 3030 3031

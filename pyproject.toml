@@ -11,6 +11,7 @@ license = "ISC"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1",
+  "pydantic>=2.9,<3",
   "uvicorn>=0.30,<1",
   "yt-dlp>=2026.10.21",
   "yt-dlp-ejs>=0.8",

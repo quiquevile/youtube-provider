@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The runtime container now uses Alpine with Python, FFmpeg, and only the Node.js executable. Docker build stages cache Python dependencies before copying application code, and the build context excludes local files.
+- Python packaging now requires Pydantic 2 explicitly, including on ARM64 builds.
 - README now states that Karaoke Eternal karaoke integration is the project's current supported use case and explains its shared-media requirement.
 - Restricted searches now query each YouTube channel directly and filter/rank results against the requested artist and title, improving recall and removing unrelated partial matches.
 - Search results follow the configured channel order, with move-up and move-down controls in administration.
@@ -22,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- CI now smoke-tests the built image on each native architecture, including an H.264/AAC FFmpeg conversion.
 - GitHub Actions validation and native AMD64/ARM64 Docker Hub publishing for development, release, main, and version tags.
 - Administration folder picker for profile and client output directories, showing folders visible and writable by the provider while retaining manual path entry.
 - Initial project documentation and ignore rules.
@@ -29,3 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Editable karaoke profile with six curated channels, channel-specific artist/title rules, quality preferences, and MP4 output.
 - Local administration interface for profiles, API keys, parsing previews, password changes, and manual or scheduled yt-dlp updates.
 - Docker Compose deployment for x86-64 and ARM64 with separate state and media volumes, automated tests, and ISC licensing.
+
+### Security
+
+- Removed npm and its unused dependency tree from the runtime image; Alpine system packages and the pip used by yt-dlp updates are upgraded during the build.
