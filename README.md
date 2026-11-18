@@ -68,6 +68,8 @@ Minimum and maximum resolution use preset dropdowns (`144p` through `4320p`, or 
 
 Each client key can have its own absolute output directory, set when creating the key or edited later. Leave it blank to use the profile's directory. In Docker, custom directories should be writable by the provider and mounted persistently. New files use clean names such as `Elton John - Your Song.mp4`; when a name is already used, the provider reserves `Elton John - Your Song (2).mp4` and so on. Existing files are not renamed or moved. A completed item requested again by the same key keeps its existing path; folder changes apply to new downloads.
 
+The administration page has a **Browse…** button beside each output directory field. It opens a folder picker for directories visible to the provider process and lets you select an existing writable folder. You can still type any absolute path manually, including a directory that will be created later. A web browser cannot supply a usable absolute path from its native operating-system folder dialog; in Docker, the provider's paths are inside the container rather than on the browser's host.
+
 ## SongProvider API
 
 For a profile named `karaoke`, the provider base URL is `/profiles/karaoke`. Append these paths to that base URL:

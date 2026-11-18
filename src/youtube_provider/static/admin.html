@@ -17,7 +17,7 @@
   <section class="panel">
     <h2>Profile settings</h2>
     <form id="profile-form">
-      <div class="grid"><label>Name <input id="profile-name" required></label><label>Output directory <input id="output-dir" required></label><label>Default search terms, comma separated <input id="search-terms"></label><label>Results per channel <input id="search-count" type="number" min="1" max="50" required></label></div>
+      <div class="grid"><label>Name <input id="profile-name" required></label><div class="folder-field"><label>Output directory <input id="output-dir" required></label><button id="browse-output-dir" type="button" class="subtle">Browse…</button></div><label>Default search terms, comma separated <input id="search-terms"></label><label>Results per channel <input id="search-count" type="number" min="1" max="50" required></label></div>
       <h3>Video quality</h3>
       <div class="row"><label>Minimum <select id="min-height"></select></label><label>Maximum <select id="max-height"></select></label><label>Output format <select disabled><option>MP4</option></select></label></div>
       <p>Drag resolutions to set preference. The first available target wins; higher source video is scaled down.</p>
@@ -37,7 +37,7 @@
   <section class="panel">
     <h2>Client API keys</h2>
     <p>Each key identifies one client. Leave its output directory blank to use the profile directory. The secret is shown only when created.</p>
-    <form id="new-key" class="row"><label>Client label <input id="key-label" placeholder="Living room" required></label><label>Output directory (optional) <input id="key-output-dir" placeholder="Use profile directory"></label><button type="submit">Create key</button></form>
+    <form id="new-key" class="row"><label>Client label <input id="key-label" placeholder="Living room" required></label><div class="folder-field"><label>Output directory (optional) <input id="key-output-dir" placeholder="Use profile directory"></label><button id="browse-key-output-dir" type="button" class="subtle">Browse…</button></div><button type="submit">Create key</button></form>
     <p id="new-secret"></p><div id="keys"></div>
   </section>
   <section class="panel">
@@ -50,3 +50,12 @@
     <form id="password-form" class="row"><label>Current password <input id="password-current" type="password" required></label><label>New password <input id="password-new" type="password" minlength="12" required></label><button type="submit">Change password</button></form>
   </section>
 </main>
+<dialog id="folder-dialog" aria-labelledby="folder-title">
+  <h2 id="folder-title">Choose a provider folder</h2>
+  <p>These are folders visible to the provider process. In Docker, choose a mounted path inside the container.</p>
+  <div class="folder-location"><button id="folder-up" type="button" class="subtle">Up</button><code id="folder-current"></code></div>
+  <p id="folder-error" role="alert"></p>
+  <ul id="folder-list" aria-label="Subdirectories"></ul>
+  <p id="folder-note"></p>
+  <div class="actions"><button id="folder-select" type="button">Use this folder</button><button id="folder-cancel" type="button" class="subtle">Cancel</button></div>
+</dialog>

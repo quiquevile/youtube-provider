@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import collections
+import os
 import time
 from importlib.resources import files
+from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -123,6 +125,33 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
                 "update": {"status": updater.status, "message": updater.message,
                            "channel": updater.channel, "interval_hours": updater.interval_hours,
                            "version": service.store.setting("last_update_version")}}
+
+    @app.get("/admin/api/directories")
+    async def directories(request: Request):
+        _, error = session(request)
+        if error:
+            return error
+        raw_path = request.query_params.get("path", str(service.store.data_dir))
+        if len(raw_path) > 4096 or not Path(raw_path).is_absolute():
+            return denied(400, "Directory path must be absolute")
+        try:
+            directory = Path(raw_path).resolve(strict=True)
+            if not directory.is_dir():
+                return denied(400, "Path is not a directory")
+            with os.scandir(directory) as scan:
+                children = sorted((entry.name, str(Path(entry.path).resolve()))
+                                  for entry in scan if entry.is_dir())
+        except FileNotFoundError:
+            return denied(404, "Directory does not exist")
+        except PermissionError:
+            return denied(403, "Directory is not accessible")
+        except (OSError, ValueError):
+            return denied(400, "Cannot list directory")
+        return {"path": str(directory),
+                "parent": str(directory.parent) if directory.parent != directory else None,
+                "writable": os.access(directory, os.W_OK | os.X_OK),
+                "directories": [{"name": name, "path": path} for name, path in children[:500]],
+                "truncated": len(children) > 500}
 
     @app.post("/admin/api/profiles")
     async def create_profile(request: Request):

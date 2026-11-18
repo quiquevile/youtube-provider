@@ -25,6 +25,7 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_admin(service, updater)),
                                     base_url="http://localhost") as client:
             assert (await client.get("/admin/api/state")).status_code == 401
+            assert (await client.get("/admin/api/directories", params={"path": str(tmp_path)})).status_code == 401
             assert (await client.post("/login", data={"password": "wrong"})).status_code == 401
             login = await client.post("/login", data={"password": "long-test-password"})
             assert login.status_code == 303
@@ -32,8 +33,21 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
             state = (await client.get("/admin/api/state")).json()
             assert state["api_base_url"] == "http://127.0.0.1:3030"
             assert len(state["profiles"][0]["channels"]) == 6
-            assert (await client.get("/")).status_code == 200
+            page = await client.get("/")
+            assert page.status_code == 200
+            assert page.text.count("Browse…") == 2
+            assert 'id="folder-dialog"' in page.text
             assert (await client.get("/static/admin.js")).status_code == 200
+            (tmp_path / "music").mkdir()
+            (tmp_path / "song.mp4").write_bytes(b"media")
+            listing = (await client.get("/admin/api/directories", params={"path": str(tmp_path)})).json()
+            assert listing["path"] == str(tmp_path)
+            assert listing["parent"] == str(tmp_path.parent)
+            assert listing["writable"] is True
+            assert listing["directories"] == [{"name": "music", "path": str(tmp_path / "music")}]
+            assert (await client.get("/admin/api/directories", params={"path": "relative"})).status_code == 400
+            assert (await client.get("/admin/api/directories", params={"path": str(tmp_path / "song.mp4")})).status_code == 400
+            assert (await client.get("/admin/api/directories", params={"path": str(tmp_path / "missing")})).status_code == 404
             profile = state["profiles"][0]
             assert (await client.put("/admin/api/profiles/karaoke", json=profile)).status_code == 403
             headers = {"X-CSRF-Token": state["csrf"]}

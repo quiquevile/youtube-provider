@@ -8,6 +8,10 @@ const el = (name, attrs = {}, text = '') => {
 const heights = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
 let state;
 let selected;
+let folderTarget;
+let folderCurrent;
+let folderParent;
+let folderRequest = 0;
 
 function notice(message, error = false) {
   $('#notice').textContent = message;
@@ -76,6 +80,56 @@ function renderQuality(order) {
     });
     return item;
   }));
+}
+
+async function loadFolder(path) {
+  const request = ++folderRequest;
+  $('#folder-select').disabled = true;
+  $('#folder-list').replaceChildren();
+  $('#folder-error').textContent = '';
+  $('#folder-note').textContent = 'Loading folders…';
+  const data = await api('GET', `/admin/api/directories?path=${encodeURIComponent(path)}`);
+  if (request !== folderRequest) return;
+  folderCurrent = data.path;
+  folderParent = data.parent;
+  $('#folder-current').textContent = data.path;
+  $('#folder-up').disabled = !data.parent;
+  $('#folder-select').disabled = !data.writable;
+  $('#folder-note').textContent = data.truncated ? 'Showing the first 500 folders. You can type a path manually.' :
+    (data.writable ? 'Select this folder or open a subdirectory.' : 'This folder is not writable by the provider.');
+  $('#folder-list').replaceChildren(...data.directories.map(directory => {
+    const row = el('li');
+    const button = el('button', { type: 'button' }, directory.name);
+    button.addEventListener('click', () => loadFolder(directory.path).catch(showFolderError));
+    row.append(button);
+    return row;
+  }));
+}
+
+function showFolderError(error) {
+  $('#folder-error').textContent = error.message;
+  $('#folder-note').textContent = '';
+}
+
+async function openFolderPicker(target, fallback) {
+  folderTarget = target;
+  const dialog = $('#folder-dialog');
+  if (!dialog.open) dialog.showModal();
+  const requested = target.value.trim() || fallback || '/';
+  let path = requested;
+  if (!path.startsWith('/')) path = fallback || '/';
+  while (dialog.open) {
+    try {
+      await loadFolder(path);
+      if (path !== requested && dialog.open) {
+        $('#folder-error').textContent = 'The requested folder is unavailable. Showing its nearest accessible parent; you can still type the original path manually.';
+      }
+      return;
+    } catch (error) {
+      if (path === '/') { showFolderError(error); return; }
+      path = path.slice(0, path.lastIndexOf('/')) || '/';
+    }
+  }
 }
 
 function field(labelText, value, className) {
@@ -173,6 +227,8 @@ function renderKeys() {
       const input = el('input', { placeholder: `Default: ${current().output_dir}` });
       input.value = key.output_dir || '';
       folder.append(input);
+      const browse = el('button', { type: 'button', class: 'subtle' }, 'Browse…');
+      browse.addEventListener('click', () => openFolderPicker(input, current().output_dir));
       const save = el('button', { type: 'button' }, 'Save folder');
       save.addEventListener('click', async () => {
         try {
@@ -187,13 +243,31 @@ function renderKeys() {
         try { await api('DELETE', `/admin/api/profiles/${selected}/keys/${key.id}`); await reload(); notice('Key revoked'); }
         catch (error) { notice(error.message, true); }
       });
-      row.append(folder, save, button);
+      row.append(folder, browse, save, button);
     }
     return row;
   }));
 }
 
 $('#profile-select').addEventListener('change', event => { selected = event.target.value; render(); });
+$('#browse-output-dir').addEventListener('click', () => openFolderPicker($('#output-dir'), current().output_dir));
+$('#browse-key-output-dir').addEventListener('click', () => openFolderPicker($('#key-output-dir'), $('#output-dir').value.trim()));
+$('#folder-up').addEventListener('click', () => {
+  if (folderParent) loadFolder(folderParent).catch(showFolderError);
+});
+$('#folder-select').addEventListener('click', () => {
+  if (!folderTarget || !folderCurrent) return;
+  folderTarget.value = folderCurrent;
+  folderTarget.dispatchEvent(new Event('change', { bubbles: true }));
+  $('#folder-dialog').close();
+});
+$('#folder-cancel').addEventListener('click', () => $('#folder-dialog').close());
+$('#folder-dialog').addEventListener('close', () => {
+  folderRequest += 1;
+  folderTarget = null;
+  folderCurrent = null;
+  folderParent = null;
+});
 $('#add-channel').addEventListener('click', () => { $('#channels').append(channelCard()); renderPreviewChannels(); });
 for (const id of ['min-height', 'max-height']) $(`#${id}`).addEventListener('change', () => {
   const min = Number($('#min-height').value) || 0;
