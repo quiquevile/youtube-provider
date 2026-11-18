@@ -54,7 +54,7 @@ When opening administration through a local port forward or HTTPS proxy, preserv
 
 ## Profile configuration
 
-The `karaoke` profile starts with the six curated channels and `karaoke` appended to searches. Channel entries can be added, removed, or edited in administration. Use the permanent `UC...` channel ID, not a handle or display name. Channel restrictions apply to search results, pasted YouTube URLs, and downloads.
+The `karaoke` profile starts with the six curated channels and `karaoke` appended to searches. Channel entries can be added, removed, edited, or moved up and down in administration. Their saved order sets search result priority: all results from a higher channel are streamed before those from a lower channel, even if the lower channel finishes searching first. Duplicate video IDs keep the result from the highest-priority channel. Use the permanent `UC...` channel ID, not a handle or display name. Channel restrictions apply to search results, pasted YouTube URLs, and downloads.
 
 Profiles can be cloned and deleted from administration. At least one profile must remain so the interface always has a configuration to clone.
 

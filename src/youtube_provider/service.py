@@ -187,7 +187,6 @@ class ProviderService:
                 item = {**raw, "iconUrl": icon_url}
                 if item.get("duration") is None:
                     item.pop("duration", None)
-                self.store.put_item(profile.slug, item)
                 found.append(item)
 
         async with self.search_capacity:
@@ -198,36 +197,25 @@ class ProviderService:
     async def search(self, profile: Profile, query: str, icon_url: str):
         direct_id = video_id_from_query(query)
         channels = [None] if direct_id or not profile.channels else [channel.id for channel in profile.channels]
-        queue: asyncio.Queue = asyncio.Queue()
         seen: set[str] = set()
-
-        async def one(channel_id: str | None) -> None:
-            try:
-                items = await self.search_source(profile, query, channel_id, icon_url, direct_id)
-                await queue.put(("items", items))
-            except Exception as exc:
-                await queue.put(("error", exc))
-            finally:
-                await queue.put(("done", None))
-
-        tasks = [asyncio.create_task(one(channel_id)) for channel_id in channels]
+        tasks = [asyncio.create_task(self.search_source(profile, query, channel_id, icon_url, direct_id))
+                 for channel_id in channels]
         errors = 0
-        completed = 0
         try:
-            while completed < len(tasks):
-                kind, payload = await queue.get()
-                if kind == "done":
-                    completed += 1
-                elif kind == "error":
+            for task in tasks:
+                try:
+                    items = await task
+                except Exception:
                     errors += 1
-                else:
-                    unique = []
-                    for item in payload:
-                        if item["id"] not in seen:
-                            seen.add(item["id"])
-                            unique.append(item)
-                    for line in ndjson_lines(unique):
-                        yield line
+                    continue
+                unique = []
+                for item in items:
+                    if item["id"] not in seen:
+                        seen.add(item["id"])
+                        self.store.put_item(profile.slug, item)
+                        unique.append(item)
+                for line in ndjson_lines(unique):
+                    yield line
             if errors:
                 raise WorkerError("YouTube search was incomplete")
         finally:

@@ -212,3 +212,43 @@ def test_search_stream_deduplicates_sources_and_status_filters_since(tmp_path: P
 
     asyncio.run(exercise())
     store.close()
+
+
+def test_search_results_follow_channel_priority_even_when_lower_channel_finishes_first(tmp_path: Path):
+    store = Store(tmp_path)
+    profile = store.profile("karaoke")
+    profile.channels = profile.channels[:2]
+    first_id, second_id = (channel.id for channel in profile.channels)
+    service = ProviderService(store)
+    finished = []
+    shared = {"id": "AAAAAAAAAAA", "title": "Shared", "artist": "Artist",
+              "source": "Top", "iconUrl": "https://example.test/icon.svg"}
+
+    async def fake_source(profile, query, channel_id, icon_url, video_id=None):
+        if channel_id == first_id:
+            await asyncio.sleep(0.02)
+            finished.append(first_id)
+            return [shared, {**shared, "id": "BBBBBBBBBBB", "title": "First only"}]
+        finished.append(second_id)
+        return [{**shared, "source": "Lower"},
+                {**shared, "id": "CCCCCCCCCCC", "title": "Second only"}]
+
+    service.search_source = fake_source
+
+    async def exercise():
+        lines = [json.loads(line) async for line in service.search(profile, "song", shared["iconUrl"])]
+        assert finished == [second_id, first_id]
+        assert [[entry["id"] for entry in batch] for batch in lines] == [
+            ["AAAAAAAAAAA", "BBBBBBBBBBB"], ["CCCCCCCCCCC"]]
+        assert lines[0][0]["source"] == "Top"
+        assert store.item("karaoke", shared["id"])["source"] == "Top"
+
+        profile.channels.reverse()
+        reordered = [json.loads(line) async for line in service.search(profile, "song", shared["iconUrl"])]
+        assert [[entry["id"] for entry in batch] for batch in reordered] == [
+            ["AAAAAAAAAAA", "CCCCCCCCCCC"], ["BBBBBBBBBBB"]]
+        assert reordered[0][0]["source"] == "Lower"
+        assert store.item("karaoke", shared["id"])["source"] == "Lower"
+
+    asyncio.run(exercise())
+    store.close()

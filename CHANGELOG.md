@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Search results follow the configured channel order, with move-up and move-down controls in administration.
 - New downloads use clean artist and title filenames without YouTube IDs. Colliding names receive a numbered suffix.
 - Client API keys can use their own output directory; by default they inherit the profile directory. Existing databases are migrated automatically.
 

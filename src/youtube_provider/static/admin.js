@@ -103,9 +103,23 @@ function channelCard(channel = { id: '', name: '', language: 'en', rules: [] }) 
   details.append(field('Permanent channel ID', channel.id, 'channel-id'),
                  field('Display name', channel.name, 'channel-name'),
                  field('Language', channel.language, 'channel-language'));
+  const up = el('button', { type: 'button', class: 'subtle' }, 'Move up');
+  up.addEventListener('click', () => {
+    if (card.previousElementSibling) {
+      $('#channels').insertBefore(card, card.previousElementSibling);
+      renderPreviewChannels();
+    }
+  });
+  const down = el('button', { type: 'button', class: 'subtle' }, 'Move down');
+  down.addEventListener('click', () => {
+    if (card.nextElementSibling) {
+      $('#channels').insertBefore(card.nextElementSibling, card);
+      renderPreviewChannels();
+    }
+  });
   const remove = el('button', { type: 'button', class: 'danger' }, 'Remove channel');
   remove.addEventListener('click', () => { card.remove(); renderPreviewChannels(); });
-  details.append(remove);
+  details.append(up, down, remove);
   const rules = el('div', { class: 'rules' });
   rules.replaceChildren(...channel.rules.map(ruleRow));
   const add = el('button', { type: 'button', class: 'subtle' }, 'Add parsing rule');

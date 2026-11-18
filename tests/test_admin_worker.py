@@ -43,6 +43,9 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
                 "profile": profile, "title": "ABBA - Dancing Queen (Karaoke Version)",
                 "channel_id": profile["channels"][1]["id"]})
             assert preview.json() == {"artist": "ABBA", "title": "Dancing Queen"}
+            reordered = {**profile, "channels": list(reversed(profile["channels"]))}
+            assert (await client.put("/admin/api/profiles/karaoke", headers=headers, json=reordered)).status_code == 200
+            assert store.profile("karaoke").channels[0].id == profile["channels"][-1]["id"]
             created = await client.post("/admin/api/profiles/karaoke/keys", headers=headers, json={"label": "test client"})
             assert created.status_code == 200
             secret = created.json()["secret"]
