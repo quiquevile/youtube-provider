@@ -100,3 +100,25 @@ yt-dlp updates are installed in versioned directories under the state volume. Th
 ```
 
 The integration test opens temporary loopback ports to verify that the administration and SongProvider listeners stay separate.
+
+## GitHub Actions and Docker Hub
+
+[CI](.github/workflows/ci.yml) runs the Python tests with a minimum of 80% coverage, checks the administration JavaScript syntax and installed dependencies, and builds a Python wheel. Pull requests run these checks without publishing an image. Pushes to `develop`, `release`, and `main`, version tags, and manual workflow runs also build native `linux/amd64` and `linux/arm64` images and publish a combined image to `quiquevile/youtube-provider` on Docker Hub.
+
+| Git ref | Docker Hub tags |
+| --- | --- |
+| `develop` | `edge`, `develop`, `sha-<short SHA>` |
+| `release` | `release`, `release-<pyproject.toml version>`, `sha-<short SHA>` |
+| `main` | `latest`, `sha-<short SHA>` |
+| `vX.Y.Z` or `X.Y.Z` Git tag | Matching tag, `sha-<short SHA>` |
+
+Version tags must match the version in `pyproject.toml`. The `release-<version>` tag is created only for a strict `X.Y.Z` project version. The source [Compose file](compose.yaml) builds the image locally; published images can be pulled directly, for example with `docker pull quiquevile/youtube-provider:develop` after the first successful `develop` run.
+
+To enable publishing, create these **repository secrets** in GitHub under **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret | Value |
+| --- | --- |
+| `DOCKERHUB_USERNAME` | Your Docker Hub username (`quiquevile` for this repository) |
+| `DOCKERHUB_TOKEN` | A Docker Hub personal access token with **Repo Read & Write** permission |
+
+Create the token in Docker Hub under **Account settings → Personal access tokens** and copy it when generated. Use the token rather than your Docker Hub password. The workflow needs no other manually configured secrets; GitHub provides its Actions credentials for the build cache.

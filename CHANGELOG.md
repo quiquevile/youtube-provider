@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- GitHub Actions validation and native AMD64/ARM64 Docker Hub publishing for development, release, main, and version tags.
 - Administration folder picker for profile and client output directories, showing folders visible and writable by the provider while retaining manual path entry.
 - Initial project documentation and ignore rules.
 - Standalone Python SongProvider v0 service with authenticated search, per-client downloads, status streams, and SQLite persistence.
