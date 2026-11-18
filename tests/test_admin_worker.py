@@ -75,6 +75,36 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
     store.close()
 
 
+def test_admin_login_works_through_local_port_forward_and_rejects_cross_site(tmp_path: Path):
+    store = Store(tmp_path)
+    store.set_setting("admin_password_hash", HASHER.hash("long-test-password"))
+    service = ProviderService(store)
+    updater = Updater(store)
+
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_admin(service, updater)),
+                                    base_url="http://127.0.0.1:3031") as client:
+            forwarded = {"Origin": "https://forwarded.example", "Sec-Fetch-Site": "same-origin"}
+            login = await client.post("/login", headers=forwarded,
+                                      data={"password": "long-test-password"})
+            assert login.status_code == 303
+            state = (await client.get("/admin/api/state")).json()
+            assert (await client.post("/admin/api/preview", headers={
+                **forwarded, "X-CSRF-Token": state["csrf"]}, json={
+                    "profile": state["profiles"][0], "title": "ABBA - Dancing Queen"})).status_code == 200
+            blocked = await client.post("/login", headers={
+                "Origin": "https://foreign.example", "Sec-Fetch-Site": "cross-site"},
+                data={"password": "long-test-password"})
+            assert blocked.status_code == 403
+            assert (await client.post("/admin/api/preview", headers={
+                "Origin": "https://foreign.example", "Sec-Fetch-Site": "cross-site",
+                "X-CSRF-Token": state["csrf"]}, json={
+                    "profile": state["profiles"][0], "title": "ABBA - Dancing Queen"})).status_code == 403
+
+    asyncio.run(exercise())
+    store.close()
+
+
 def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monkeypatch):
     profile = default_profile(str(tmp_path / "downloads"))
     allowed = profile.channels[0].id

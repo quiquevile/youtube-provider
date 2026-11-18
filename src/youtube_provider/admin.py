@@ -39,6 +39,17 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
     def denied(status: int = 401, message: str = "Authentication required") -> JSONResponse:
         return JSONResponse({"error": message}, status_code=status)
 
+    def same_origin(request: Request) -> bool:
+        # The browser knows the public origin even when a local forwarding proxy
+        # rewrites Host or terminates HTTPS before the request reaches Uvicorn.
+        fetch_site = request.headers.get("sec-fetch-site", "").lower()
+        if fetch_site == "same-origin":
+            return True
+        if fetch_site in ("same-site", "cross-site"):
+            return False
+        origin = request.headers.get("origin")
+        return not origin or origin.rstrip("/") == str(request.base_url).rstrip("/")
+
     def session(request: Request, *, mutate: bool = False):
         token = request.cookies.get("admin_session", "")
         csrf = service.store.session(token) if token else None
@@ -46,8 +57,7 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
             return None, denied()
         if mutate and request.headers.get("x-csrf-token") != csrf:
             return None, denied(403, "Invalid CSRF token")
-        origin = request.headers.get("origin")
-        if mutate and origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+        if mutate and not same_origin(request):
             return None, denied(403, "Cross-origin request blocked")
         return csrf, None
 
@@ -57,8 +67,7 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
 
     @app.post("/login")
     async def login(request: Request):
-        origin = request.headers.get("origin")
-        if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+        if not same_origin(request):
             return HTMLResponse("Invalid request", status_code=403)
         client = request.client.host if request.client else "unknown"
         recent = attempts.setdefault(client, collections.deque())

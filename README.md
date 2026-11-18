@@ -40,6 +40,8 @@ python3 -m venv .venv
 
 The API listens on `127.0.0.1:3030` and administration on `127.0.0.1:3031`. Data and local downloads default to `./data`. Run `youtube-song-provider --help` for command options.
 
+When opening administration through a local port forward or HTTPS proxy, preserve the browser's `Sec-Fetch-Site` header. It lets same-origin login and configuration requests pass even if the proxy changes the internal host or scheme; cross-site requests remain blocked.
+
 | Environment variable | Purpose | Default |
 | --- | --- | --- |
 | `YSP_DATA_DIR` | SQLite database and managed yt-dlp packages | `./data` |

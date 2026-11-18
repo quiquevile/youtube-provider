@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Admin login and configuration requests work through local port forwarding that changes the internal request origin, while cross-site browser requests remain blocked.
+
 ### Added
 
 - Initial project documentation and ignore rules.
