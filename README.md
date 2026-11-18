@@ -77,6 +77,8 @@ For a profile named `karaoke`, the provider base URL is `/profiles/karaoke`. App
 
 Every endpoint except discovery requires `Authorization: Bearer <key>`. Search item IDs are stable YouTube video IDs. Download state is isolated by key. The `complete` event is emitted only after the MP4 has been moved to its final path.
 
+If a previous installation reports `invalid worker event` during a download, update and restart the provider, then retry the item. The provider cleans up incomplete staging files after a failed job.
+
 Search is limited to 10 requests per minute per key and fetch to 20 requests per minute per key. Up to four status streams may be open per key. These limits protect a self-hosted instance from accidental overload.
 
 ## Updates and tests

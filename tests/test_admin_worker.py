@@ -1,5 +1,7 @@
 import asyncio
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import httpx
@@ -103,6 +105,24 @@ def test_admin_login_works_through_local_port_forward_and_rejects_cross_site(tmp
 
     asyncio.run(exercise())
     store.close()
+
+
+def test_worker_stdout_is_reserved_for_json_events():
+    script = (
+        "import os, subprocess, sys\n"
+        "from youtube_provider.worker import emit, isolate_protocol_output\n"
+        "isolate_protocol_output()\n"
+        "print('library diagnostic')\n"
+        "os.write(1, b'native diagnostic\\n')\n"
+        "subprocess.run([sys.executable, '-c', \"print('child diagnostic')\"], check=True)\n"
+        "emit({'event': 'progress', 'progress': 0.5})\n"
+    )
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == {"event": "progress", "progress": 0.5}
+    assert result.stdout.count("\n") == 1
+    assert "library diagnostic" in result.stderr
+    assert "native diagnostic" in result.stderr
+    assert "child diagnostic" in result.stderr
 
 
 def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monkeypatch):

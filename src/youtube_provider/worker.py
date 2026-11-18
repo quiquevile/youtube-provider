@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import yt_dlp
 
@@ -18,10 +18,20 @@ from .quality import select_format
 
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_protocol_output: TextIO | None = None
 
 
 def emit(event: dict[str, Any]) -> None:
-    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
+    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")),
+          file=_protocol_output or sys.stdout, flush=True)
+
+
+def isolate_protocol_output() -> None:
+    """Reserve stdout for JSON events and route library/process output to stderr."""
+    global _protocol_output
+    _protocol_output = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", buffering=1)
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+    sys.stdout = sys.stderr
 
 
 def _ydl_options(**extra: Any) -> dict[str, Any]:
@@ -166,6 +176,7 @@ def download(request: dict) -> None:
 
 
 def main() -> None:
+    isolate_protocol_output()
     try:
         request = json.loads(sys.stdin.readline())
         if request.get("action") == "search":

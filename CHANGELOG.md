@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Download workers keep yt-dlp and child-process diagnostics out of the JSON event stream, preventing spurious download failures.
 - Admin login and configuration requests work through local port forwarding that changes the internal request origin, while cross-site browser requests remain blocked.
 
 ### Added
