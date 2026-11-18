@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- README now documents local installation without test dependencies and focuses on setup and operation for provider users.
 - The runtime container now uses Alpine with Python, FFmpeg, and only the Node.js executable. Docker build stages cache Python dependencies before copying application code, and the build context excludes local files.
 - Python packaging now requires Pydantic 2 explicitly, including on ARM64 builds.
 - README now states that Karaoke Eternal karaoke integration is the project's current supported use case and explains its shared-media requirement.

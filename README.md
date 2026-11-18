@@ -13,7 +13,7 @@ A standalone, self-hosted YouTube provider designed for [Karaoke Eternal's SongP
 
 ## Docker quick start
 
-The Alpine runtime image contains Python, FFmpeg/FFprobe, and only the Node.js executable needed by yt-dlp for YouTube's JavaScript; it does not include npm. The Docker build caches Python dependencies separately from application code, and [.dockerignore](.dockerignore) excludes local state and development files from the build context. [Docker Compose](compose.yaml) publishes both listeners on the host's loopback address only.
+The Docker image includes Python, FFmpeg/FFprobe, and Node.js for yt-dlp's YouTube support. [Docker Compose](compose.yaml) publishes both listeners on the host's loopback address only.
 
 ```sh
 docker compose build
@@ -27,13 +27,13 @@ Compose keeps SQLite and update packages in the `youtube-provider-state` volume.
 
 If Karaoke Eternal runs on another host, publish the API behind HTTPS and arrange shared access to the media directory: completed events contain provider-side file paths, not downloadable URLs. Configure `YSP_PUBLIC_BASE_URL` with the externally reachable origin, such as `https://songs.example.com`, so the source icon URL works in end-user browsers. Disable reverse-proxy buffering for search and status streams. The administration port is intended to stay local; exposing it through a separately secured reverse proxy is an operator decision.
 
-## Local development
+## Local installation
 
-Requires Python 3.12+, Node.js, and `ffmpeg`/`ffprobe` on `PATH`.
+Requires Python 3.12+, Node.js 22+, and `ffmpeg`/`ffprobe` on `PATH`.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m pip install .
 .venv/bin/youtube-song-provider admin set-password
 .venv/bin/youtube-song-provider serve
 ```
@@ -89,14 +89,6 @@ If a previous installation reports `invalid worker event` during a download, upd
 
 Search is limited to 10 requests per minute per key and fetch to 20 requests per minute per key. Up to four status streams may be open per key. These limits protect a self-hosted instance from accidental overload.
 
-## Updates and tests
+## yt-dlp updates
 
-yt-dlp updates are installed in versioned directories under the state volume. The admin can update immediately or choose `stable`/`nightly` and an interval in hours (`0` disables automatic updates). A successful installation is verified before new jobs switch to it; running workers finish on their previous version.
-
-```sh
-.venv/bin/python -m pytest -q
-.venv/bin/python -m coverage run -m pytest -q
-.venv/bin/python -m coverage report -m
-```
-
-The integration test opens temporary loopback ports to verify that the administration and SongProvider listeners stay separate.
+yt-dlp updates are installed in versioned directories under the data directory (the state volume in Docker). The admin can update immediately or choose `stable`/`nightly` and an interval in hours (`0` disables automatic updates). A successful installation is verified before new jobs switch to it; running workers finish on their previous version.
