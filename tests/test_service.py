@@ -252,3 +252,32 @@ def test_search_results_follow_channel_priority_even_when_lower_channel_finishes
 
     asyncio.run(exercise())
     store.close()
+
+
+def test_search_keeps_results_when_one_channel_fails(tmp_path: Path):
+    store = Store(tmp_path)
+    profile = store.profile("karaoke")
+    profile.channels = profile.channels[:2]
+    service = ProviderService(store)
+    result = item(store)
+
+    async def one_failure(profile, query, channel_id, icon_url, video_id=None):
+        if channel_id == profile.channels[0].id:
+            raise WorkerError("channel unavailable")
+        return [result]
+
+    service.search_source = one_failure
+
+    async def exercise():
+        found = [json.loads(line) async for line in service.search(profile, "ABBA", result["iconUrl"])]
+        assert [entry["id"] for batch in found for entry in batch] == [result["id"]]
+
+        async def all_fail(profile, query, channel_id, icon_url, video_id=None):
+            raise WorkerError("channel unavailable")
+
+        service.search_source = all_fail
+        with pytest.raises(WorkerError, match="All YouTube channel searches failed"):
+            _ = [line async for line in service.search(profile, "ABBA", result["iconUrl"])]
+
+    asyncio.run(exercise())
+    store.close()

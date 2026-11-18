@@ -56,6 +56,10 @@ When opening administration through a local port forward or HTTPS proxy, preserv
 
 The `karaoke` profile starts with the six curated channels and `karaoke` appended to searches. Channel entries can be added, removed, edited, or moved up and down in administration. Their saved order sets search result priority: all results from a higher channel are streamed before those from a lower channel, even if the lower channel finishes searching first. Duplicate video IDs keep the result from the highest-priority channel. Use the permanent `UC...` channel ID, not a handle or display name. Channel restrictions apply to search results, pasted YouTube URLs, and downloads.
 
+For a restricted profile, each configured channel is searched within that channel rather than by adding its name to a global YouTube query. The provider checks the permanent channel ID on every candidate and returns only videos whose parsed artist and title contain every whole word from the user's query (case and accents ignored). Configured default search terms such as `karaoke` are excluded from this relevance check. Exact title matches rank first within a channel. The results-per-channel setting limits returned matches; the provider scans a larger bounded set of candidates to avoid losing relevant videos among YouTube's approximate matches. A pasted YouTube video URL bypasses text matching but still obeys the channel allowlist.
+
+If one channel search fails, matches from other channels are still returned. The search reports an error when all configured channels fail.
+
 Profiles can be cloned and deleted from administration. At least one profile must remain so the interface always has a configuration to clone.
 
 Each channel has ordered parsing rules. A rule is a regular expression with named capture groups and templates for `artist` and `title`. For example, `(?P<artist>.+) - (?P<title>.+)` with `{artist}` and `{title}`. Rules are tried in order for the matching channel; a conservative fallback is used when none matches. The preview panel tests unsaved rules with a sample title. Rules are evaluated with a timeout.

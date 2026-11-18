@@ -8,8 +8,10 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, TextIO
+from urllib.parse import urlencode
 
 import yt_dlp
 
@@ -58,6 +60,44 @@ def _channel(profile: Profile, channel_id: str | None) -> Channel | None:
     return next((channel for channel in profile.channels if channel.id == channel_id), None)
 
 
+def _words(value: str) -> list[str]:
+    normalized = unicodedata.normalize("NFKD", value.casefold())
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.replace("’", "").replace("'", "").replace("&", " and ")
+    return [word for word in re.split(r"[^\w]+", normalized.replace("_", " ")) if word]
+
+
+def _contains(words: list[str], phrase: list[str]) -> bool:
+    return any(words[index:index + len(phrase)] == phrase
+               for index in range(len(words) - len(phrase) + 1))
+
+
+def relevance(query: str, artist: str, title: str, search_terms: list[str]) -> int:
+    """Require whole query words in parsed metadata, then rank closer matches."""
+    requested = _words(query)
+    for term in search_terms:
+        phrase = _words(term)
+        if phrase and _contains(requested, phrase):
+            start = next(index for index in range(len(requested) - len(phrase) + 1)
+                         if requested[index:index + len(phrase)] == phrase)
+            del requested[start:start + len(phrase)]
+    if not requested:
+        return 1
+    artist_words, title_words = _words(artist), _words(title)
+    combined = artist_words + title_words
+    if not set(requested).issubset(combined):
+        return 0
+    if requested == title_words:
+        return 5
+    if requested in (combined, title_words + artist_words):
+        return 4
+    if _contains(title_words, requested):
+        return 3
+    if _contains(combined, requested) or _contains(title_words + artist_words, requested):
+        return 2
+    return 1
+
+
 def search(request: dict) -> None:
     profile = Profile.model_validate(request["profile"])
     query = str(request["query"]).strip()
@@ -66,16 +106,22 @@ def search(request: dict) -> None:
     if requested_channel and not channel:
         raise ValueError("unknown channel")
     direct_id = request.get("video_id")
-    results: list[dict] = []
-    with yt_dlp.YoutubeDL(_ydl_options(extract_flat="in_playlist", ignoreerrors=True, skip_download=True)) as ydl:
+    results: list[tuple[int, dict]] = []
+    candidate_count = min(100, profile.search_count * 3)
+    with yt_dlp.YoutubeDL(_ydl_options(extract_flat="in_playlist", ignoreerrors=True,
+                                       skip_download=True, playlistend=candidate_count)) as ydl:
         if direct_id:
             entries = [_video_info(ydl, str(direct_id))]
         else:
             terms = search_query(query, profile.search_terms)
             if channel:
-                terms += " " + channel.name
-            listing = ydl.extract_info(f"ytsearch{profile.search_count}:{terms}", download=False)
-            entries = list(listing.get("entries") or []) if isinstance(listing, dict) else []
+                source = f"https://www.youtube.com/channel/{channel.id}/search?{urlencode({'query': terms})}"
+            else:
+                source = f"ytsearch{candidate_count}:{terms}"
+            listing = ydl.extract_info(source, download=False)
+            if not isinstance(listing, dict):
+                raise RuntimeError("YouTube search is unavailable")
+            entries = list(listing.get("entries") or [])
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
@@ -100,6 +146,9 @@ def search(request: dict) -> None:
                 continue
             matched_channel = _channel(profile, actual_id)
             artist, song = parse_metadata(title, matched_channel)
+            score = 1 if direct_id else relevance(query, artist, song, profile.search_terms)
+            if not score:
+                continue
             duration = entry.get("duration")
             result = {
                 "id": video_id, "title": song[:1024], "artist": artist[:1024],
@@ -108,8 +157,9 @@ def search(request: dict) -> None:
             }
             if isinstance(duration, (int, float)) and duration > 0:
                 result["duration"] = float(duration)
-            results.append(result)
-    emit({"event": "results", "items": results})
+            results.append((score, result))
+    results.sort(key=lambda pair: -pair[0])
+    emit({"event": "results", "items": [item for _, item in results[:profile.search_count]]})
 
 
 def download(request: dict) -> None:

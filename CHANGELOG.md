@@ -8,11 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- A failed channel search no longer discards matches from other channels, and a top-level YouTube failure no longer appears as an empty successful search.
 - Download workers keep yt-dlp and child-process diagnostics out of the JSON event stream, preventing spurious download failures.
 - Admin login and configuration requests work through local port forwarding that changes the internal request origin, while cross-site browser requests remain blocked.
 
 ### Changed
 
+- Restricted searches now query each YouTube channel directly and filter/rank results against the requested artist and title, improving recall and removing unrelated partial matches.
 - Search results follow the configured channel order, with move-up and move-down controls in administration.
 - New downloads use clean artist and title filenames without YouTube IDs. Colliding names receive a numbered suffix.
 - Client API keys can use their own output directory; by default they inherit the profile directory. Existing databases are migrated automatically.

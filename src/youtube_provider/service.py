@@ -200,14 +200,14 @@ class ProviderService:
         seen: set[str] = set()
         tasks = [asyncio.create_task(self.search_source(profile, query, channel_id, icon_url, direct_id))
                  for channel_id in channels]
-        errors = 0
+        successful = 0
         try:
             for task in tasks:
                 try:
                     items = await task
                 except Exception:
-                    errors += 1
                     continue
+                successful += 1
                 unique = []
                 for item in items:
                     if item["id"] not in seen:
@@ -216,8 +216,8 @@ class ProviderService:
                         unique.append(item)
                 for line in ndjson_lines(unique):
                     yield line
-            if errors:
-                raise WorkerError("YouTube search was incomplete")
+            if not successful:
+                raise WorkerError("All YouTube channel searches failed")
         finally:
             for task in tasks:
                 task.cancel()

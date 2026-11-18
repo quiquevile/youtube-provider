@@ -148,10 +148,12 @@ def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monke
     profile = default_profile(str(tmp_path / "downloads"))
     allowed = profile.channels[0].id
     emitted = []
+    queries = []
 
     class FakeYdl:
         def __init__(self, options):
             self.options = options
+            assert options["playlistend"] == profile.search_count * 3
 
         def __enter__(self):
             return self
@@ -160,7 +162,8 @@ def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monke
             pass
 
         def extract_info(self, query, download=False):
-            if query.startswith("ytsearch"):
+            queries.append(query)
+            if "/search?query=" in query:
                 return {"entries": [
                     {"id": "dQw4w9WgXcQ", "title": "Song - Artist | Karaoke Version | KaraFun"},
                     {"id": "AAAAAAAAAAA", "title": "Song - Artist | Karaoke Version | KaraFun"},
@@ -175,6 +178,99 @@ def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monke
     worker.search({"profile": profile.model_dump(), "query": "Song", "channel_id": allowed})
     assert len(emitted[0]["items"]) == 1
     assert emitted[0]["items"][0]["artist"] == "Artist"
+    assert queries[0].startswith(f"https://www.youtube.com/channel/{allowed}/search?query=Song+karaoke")
+
+
+def test_search_relevance_filters_unrelated_titles_and_artist_matches(tmp_path, monkeypatch):
+    profile = default_profile(str(tmp_path / "downloads"))
+    profile.channels = profile.channels[:1]
+    profile.search_count = 2
+    channel_id = profile.channels[0].id
+    emitted = []
+
+    class FakeYdl:
+        def __init__(self, options):
+            assert options["playlistend"] == 6
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, query, download=False):
+            assert query.startswith(f"https://www.youtube.com/channel/{channel_id}/search?")
+            return {"entries": [
+                {"id": "AAAAAAAAAAA", "title": "I am... I Said - Neil Diamond | Karaoke Version | KaraFun", "channel_id": channel_id},
+                {"id": "BBBBBBBBBBB", "title": "I'm Still Standing - Sing (Taron Egerton) | Karaoke Version | KaraFun", "channel_id": channel_id},
+                {"id": "CCCCCCCCCCC", "title": "Your Song - Ellie Goulding | Karaoke Version | KaraFun", "channel_id": channel_id},
+                {"id": "fGI2vCk6ykY", "title": "Your Song - Elton John | Karaoke Version | KaraFun", "channel_id": channel_id},
+            ]}
+
+    monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
+    monkeypatch.setattr(worker, "emit", emitted.append)
+    worker.search({"profile": profile.model_dump(), "query": "your song", "channel_id": channel_id})
+    assert [item["id"] for item in emitted[-1]["items"]] == ["CCCCCCCCCCC", "fGI2vCk6ykY"]
+    worker.search({"profile": profile.model_dump(), "query": "your song elton john", "channel_id": channel_id})
+    assert [item["id"] for item in emitted[-1]["items"]] == ["fGI2vCk6ykY"]
+    assert emitted[-1]["items"][0]["artist"] == "Elton John"
+
+
+def test_search_relevance_normalizes_accents_and_whole_words():
+    assert worker.relevance("cancion karaoke", "Mecano", "Canción", ["karaoke"]) == 5
+    assert worker.relevance("your song elton john", "Elton John", "Your Song", ["karaoke"]) == 4
+    assert worker.relevance("elton john your song", "Elton John", "Your Song", ["karaoke"]) == 4
+    assert worker.relevance("your song", "Elton John", "Your Song", []) == 5
+    assert worker.relevance("song", "Elton John", "Songs", []) == 0
+    assert worker.relevance("your song", "Neil Diamond", "I Am... I Said", []) == 0
+
+
+def test_direct_video_lookup_bypasses_text_filter_but_keeps_channel_allowlist(tmp_path, monkeypatch):
+    profile = default_profile(str(tmp_path / "downloads"))
+    channel_id = profile.channels[0].id
+    emitted = []
+
+    class FakeYdl:
+        def __init__(self, options):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, query, download=False):
+            return {"id": "fGI2vCk6ykY", "title": "Your Song - Elton John | Karaoke Version | KaraFun",
+                    "channel_id": channel_id}
+
+    monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
+    monkeypatch.setattr(worker, "emit", emitted.append)
+    worker.search({"profile": profile.model_dump(), "query": "https://youtu.be/fGI2vCk6ykY",
+                   "video_id": "fGI2vCk6ykY"})
+    assert [item["id"] for item in emitted[-1]["items"]] == ["fGI2vCk6ykY"]
+
+
+def test_search_reports_top_level_youtube_failure_instead_of_empty_results(tmp_path, monkeypatch):
+    profile = default_profile(str(tmp_path / "downloads"))
+
+    class FakeYdl:
+        def __init__(self, options):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, query, download=False):
+            return None
+
+    monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
+    with pytest.raises(RuntimeError, match="unavailable"):
+        worker.search({"profile": profile.model_dump(), "query": "your song",
+                       "channel_id": profile.channels[0].id})
 
 
 def test_updater_switches_only_after_verification(tmp_path):
@@ -248,7 +344,7 @@ def test_unrestricted_profile_accepts_any_channel_but_restricted_profile_does_no
             pass
 
         def extract_info(self, query, download=False):
-            if query.startswith("ytsearch"):
+            if query.startswith("ytsearch") or "/search?query=" in query:
                 return {"entries": [{"id": "dQw4w9WgXcQ", "title": "Artist - Song",
                                      "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx", "channel": "Unknown"}]}
             return {"id": "dQw4w9WgXcQ", "title": "Artist - Song",
