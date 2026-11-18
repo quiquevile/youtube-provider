@@ -45,6 +45,8 @@ def test_download_publishes_progress_completion_and_repeats_without_work(tmp_pat
         assert states[3]["progress"] == 0.5
         assert states[-1]["progress"] == 1
         assert Path(states[-1]["path"]).is_file()
+        assert Path(states[-1]["path"]).name == "ABBA - Dancing Queen.mp4"
+        assert Path(states[-1]["path"]).parent == Path(profile.output_dir)
         service.fetch(profile, key_id, result, 11, None)
         assert len(calls) == 1
         updated = queue.get_nowait()
@@ -54,6 +56,75 @@ def test_download_publishes_progress_completion_and_repeats_without_work(tmp_pat
         await service.jobs[("karaoke", key_id, result["id"])]
         assert len(calls) == 2
         service.unsubscribe("karaoke", key_id, queue)
+
+    asyncio.run(exercise())
+    store.close()
+
+
+def test_client_folder_overrides_profile_directory_for_new_downloads(tmp_path: Path):
+    store = Store(tmp_path)
+    profile = store.profile("karaoke")
+    default_key, _ = store.add_key("karaoke", "default")
+    custom_dir = tmp_path / "private-client"
+    custom_key, _ = store.add_key("karaoke", "custom", str(custom_dir))
+    service = ProviderService(store)
+    original = item(store)
+    payloads = []
+
+    async def fake_worker(payload, on_event, *, timeout, job_key=None):
+        payloads.append(payload)
+        path = Path(payload["final_path"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"mp4")
+        await on_event({"event": "complete", "path": str(path)})
+
+    service.run_worker = fake_worker
+
+    async def exercise():
+        service.fetch(profile, default_key, original, 1, None)
+        service.fetch(profile, custom_key, original, 1, None)
+        await asyncio.gather(*tuple(service.jobs.values()))
+        default_state = store.download("karaoke", default_key, original["id"])
+        custom_state = store.download("karaoke", custom_key, original["id"])
+        assert Path(default_state["path"]).parent == Path(profile.output_dir)
+        assert Path(custom_state["path"]).parent == custom_dir
+        assert Path(custom_state["path"]).name == "ABBA - Dancing Queen.mp4"
+        assert {payload["profile"]["output_dir"] for payload in payloads} == {
+            profile.output_dir, str(custom_dir)}
+
+        new_dir = tmp_path / "new-client-folder"
+        assert store.set_key_output_dir("karaoke", custom_key, str(new_dir))
+        other = {**original, "id": "fGI2vCk6ykY", "title": "Your Song"}
+        service.fetch(profile, custom_key, other, 2, None)
+        await service.jobs[("karaoke", custom_key, other["id"])]
+        assert Path(store.download("karaoke", custom_key, other["id"])["path"]).parent == new_dir
+        service.fetch(profile, custom_key, original, 3, None)
+        assert store.download("karaoke", custom_key, original["id"])["path"] == custom_state["path"]
+
+    asyncio.run(exercise())
+    store.close()
+
+
+def test_failed_download_releases_clean_filename(tmp_path: Path):
+    store = Store(tmp_path)
+    profile = store.profile("karaoke")
+    key_id, _ = store.add_key("karaoke", "client")
+    service = ProviderService(store)
+    first = item(store)
+
+    async def failed_worker(payload, on_event, *, timeout, job_key=None):
+        raise WorkerError("download failed")
+
+    service.run_worker = failed_worker
+
+    async def exercise():
+        service.fetch(profile, key_id, first, 1, None)
+        await service.jobs[("karaoke", key_id, first["id"])]
+        assert store.download("karaoke", key_id, first["id"])["status"] == "error"
+        second = {**first, "id": "fGI2vCk6ykY"}
+        path = store.reserve_output_path("karaoke", key_id, second["id"], Path(profile.output_dir),
+                                         "ABBA - Dancing Queen.mp4")
+        assert path.name == "ABBA - Dancing Queen.mp4"
 
     asyncio.run(exercise())
     store.close()

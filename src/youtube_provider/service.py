@@ -41,11 +41,11 @@ def video_id_from_query(query: str) -> str | None:
     return candidate if VIDEO_ID.fullmatch(candidate) else None
 
 
-def safe_filename(artist: str, title: str, video_id: str) -> str:
+def safe_filename(artist: str, title: str) -> str:
     name = f"{artist} - {title}" if artist else title
     name = re.sub(r"[\\/:*?\"<>|\x00-\x1f\x7f]", " ", name)
     name = re.sub(r"\s+", " ", name).strip(" .")[:180].strip(" .") or "video"
-    return f"{name} [{video_id}].mp4"
+    return f"{name}.mp4"
 
 
 def public_item(item: dict) -> dict:
@@ -257,13 +257,16 @@ class ProviderService:
 
     async def _download(self, profile: Profile, key_id: str, item: dict, state: dict) -> None:
         job_key = (profile.slug, key_id, item["id"])
-        filename = safe_filename(item["artist"], item["title"], item["id"])
-        final_path = Path(profile.output_dir) / key_id / filename
-        stage = Path(profile.output_dir) / ".partial" / key_id / item["id"]
+        filename = safe_filename(item["artist"], item["title"])
+        output_dir = Path(self.store.key_output_dir(profile.slug, key_id) or profile.output_dir)
+        stage = output_dir / ".partial" / key_id / item["id"]
+        final_path: Path | None = None
         try:
             async with self.capacity:
                 if state["status"] == "canceled":
                     return
+                final_path = self.store.reserve_output_path(profile.slug, key_id, item["id"],
+                                                            output_dir, filename)
                 if final_path.is_file():
                     state.update(status="complete", progress=1.0, path=str(final_path))
                     self.publish(profile.slug, key_id, state)
@@ -288,7 +291,8 @@ class ProviderService:
                             state.pop("eta", None)
                     self.publish(profile.slug, key_id, state)
 
-                await self.run_worker({"action": "download", "profile": profile.model_dump(),
+                worker_profile = profile.model_copy(update={"output_dir": str(output_dir)})
+                await self.run_worker({"action": "download", "profile": worker_profile.model_dump(),
                                        "video_id": item["id"], "final_path": str(final_path),
                                        "stage_dir": str(stage)}, update, timeout=7200, job_key=job_key)
                 if state["status"] != "complete":
@@ -304,6 +308,8 @@ class ProviderService:
             self.publish(profile.slug, key_id, state)
         finally:
             shutil.rmtree(stage, ignore_errors=True)
+            if final_path is not None and state["status"] != "complete" and not final_path.exists():
+                self.store.release_output_path(profile.slug, key_id, item["id"], final_path)
             self.jobs.pop(job_key, None)
             self.active_states.pop(job_key, None)
 

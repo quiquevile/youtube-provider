@@ -191,11 +191,34 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
         if error:
             return error
         try:
-            label = str((await request.json())["label"])
-            key_id, secret = service.store.add_key(slug, label)
+            data = await request.json()
+            if not isinstance(data, dict):
+                raise ValueError("request body must be an object")
+            label = str(data["label"])
+            output_dir = data.get("output_dir")
+            if output_dir is not None and not isinstance(output_dir, str):
+                raise ValueError("output_dir must be a path string or null")
+            key_id, secret = service.store.add_key(slug, label, output_dir)
         except (ValueError, KeyError, TypeError) as exc:
             return denied(400, str(exc)[:1000])
         return {"id": key_id, "secret": secret}  # shown only once
+
+    @app.put("/admin/api/profiles/{slug}/keys/{key_id}")
+    async def update_key(slug: str, key_id: str, request: Request):
+        _, error = session(request, mutate=True)
+        if error:
+            return error
+        try:
+            data = await request.json()
+            if not isinstance(data, dict):
+                raise ValueError("request body must be an object")
+            output_dir = data["output_dir"]
+            if output_dir is not None and not isinstance(output_dir, str):
+                raise ValueError("output_dir must be a path string or null")
+            changed = service.store.set_key_output_dir(slug, key_id, output_dir)
+        except (ValueError, KeyError, TypeError) as exc:
+            return denied(400, str(exc)[:1000])
+        return {} if changed else denied(404, "Unknown active key")
 
     @app.delete("/admin/api/profiles/{slug}/keys/{key_id}")
     async def revoke_key(slug: str, key_id: str, request: Request):

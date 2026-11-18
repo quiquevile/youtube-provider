@@ -155,13 +155,25 @@ function renderKeys() {
     const row = el('div', { class: 'key' });
     row.append(el('span', {}, `${key.label} · ${key.id.slice(0, 8)} · ${key.revoked ? 'revoked' : 'active'}`));
     if (!key.revoked) {
+      const folder = el('label', {}, 'Output directory');
+      const input = el('input', { placeholder: `Default: ${current().output_dir}` });
+      input.value = key.output_dir || '';
+      folder.append(input);
+      const save = el('button', { type: 'button' }, 'Save folder');
+      save.addEventListener('click', async () => {
+        try {
+          await api('PUT', `/admin/api/profiles/${selected}/keys/${key.id}`,
+                    { output_dir: input.value.trim() || null });
+          await reload(); notice('Client folder saved');
+        } catch (error) { notice(error.message, true); }
+      });
       const button = el('button', { type: 'button', class: 'danger' }, 'Revoke');
       button.addEventListener('click', async () => {
         if (!confirm(`Revoke key for ${key.label}?`)) return;
         try { await api('DELETE', `/admin/api/profiles/${selected}/keys/${key.id}`); await reload(); notice('Key revoked'); }
         catch (error) { notice(error.message, true); }
       });
-      row.append(button);
+      row.append(folder, save, button);
     }
     return row;
   }));
@@ -206,7 +218,9 @@ $('#preview-form').addEventListener('submit', async event => {
 $('#new-key').addEventListener('submit', async event => {
   event.preventDefault();
   try {
-    const result = await api('POST', `/admin/api/profiles/${selected}/keys`, { label: $('#key-label').value });
+    const result = await api('POST', `/admin/api/profiles/${selected}/keys`, {
+      label: $('#key-label').value, output_dir: $('#key-output-dir').value.trim() || null,
+    });
     await reload(); $('#new-secret').textContent = `Copy this key now; it will not be shown again: ${result.secret}`;
     notice('Key created');
   } catch (error) { notice(error.message, true); }

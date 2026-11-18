@@ -37,6 +37,10 @@ class Store:
                     digest TEXT NOT NULL UNIQUE, created REAL NOT NULL, revoked INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY (profile) REFERENCES profiles(slug)
                 );
+                CREATE TABLE IF NOT EXISTS media_paths (
+                    profile TEXT NOT NULL, key_id TEXT NOT NULL, id TEXT NOT NULL,
+                    path TEXT NOT NULL UNIQUE, PRIMARY KEY (profile, key_id, id)
+                );
                 CREATE TABLE IF NOT EXISTS items (
                     profile TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL,
                     created REAL NOT NULL, PRIMARY KEY (profile, id)
@@ -50,6 +54,9 @@ class Store:
                     digest TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL
                 );
             """)
+            key_columns = {row[1] for row in self.db.execute("PRAGMA table_info(api_keys)")}
+            if "output_dir" not in key_columns:
+                self.db.execute("ALTER TABLE api_keys ADD COLUMN output_dir TEXT")
             initialized = self.db.execute("SELECT 1 FROM settings WHERE name='initialized'").fetchone()
             if not initialized:
                 output_root = Path(os.environ.get("YSP_OUTPUT_ROOT", str(self.data_dir / "downloads"))).resolve()
@@ -81,25 +88,81 @@ class Store:
             self.db.execute("DELETE FROM api_keys WHERE profile=?", (slug,))
             self.db.execute("DELETE FROM items WHERE profile=?", (slug,))
             self.db.execute("DELETE FROM downloads WHERE profile=?", (slug,))
+            self.db.execute("DELETE FROM media_paths WHERE profile=?", (slug,))
             return self.db.execute("DELETE FROM profiles WHERE slug=?", (slug,)).rowcount > 0
 
-    def add_key(self, profile: str, label: str) -> tuple[str, str]:
+    @staticmethod
+    def _output_dir(value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("client output directory must be a path string")
+        if not value.strip():
+            return None
+        if "\0" in value or not Path(value).is_absolute():
+            raise ValueError("client output directory must be an absolute path")
+        return str(Path(value).resolve())
+
+    def add_key(self, profile: str, label: str, output_dir: str | None = None) -> tuple[str, str]:
         if not self.profile(profile):
             raise ValueError("unknown profile")
         if not label.strip() or len(label) > 128:
             raise ValueError("key label must contain 1-128 characters")
+        output_dir = self._output_dir(output_dir)
         key_id = secrets.token_hex(16)
         secret = secrets.token_urlsafe(32)
         digest = hashlib.sha256(secret.encode()).hexdigest()
         with self.lock, self.db:
-            self.db.execute("INSERT INTO api_keys VALUES (?, ?, ?, ?, ?, 0)",
-                            (key_id, profile, label.strip(), digest, time.time()))
+            self.db.execute("INSERT INTO api_keys (id, profile, label, digest, created, revoked, output_dir) "
+                            "VALUES (?, ?, ?, ?, ?, 0, ?)",
+                            (key_id, profile, label.strip(), digest, time.time(), output_dir))
         return key_id, secret
 
     def keys(self, profile: str) -> list[dict]:
         with self.lock:
-            rows = self.db.execute("SELECT id, label, created, revoked FROM api_keys WHERE profile=? ORDER BY created DESC", (profile,)).fetchall()
+            rows = self.db.execute("SELECT id, label, created, revoked, output_dir FROM api_keys "
+                                   "WHERE profile=? ORDER BY created DESC", (profile,)).fetchall()
         return [dict(row) for row in rows]
+
+    def key_output_dir(self, profile: str, key_id: str) -> str | None:
+        with self.lock:
+            row = self.db.execute("SELECT output_dir FROM api_keys WHERE profile=? AND id=?",
+                                  (profile, key_id)).fetchone()
+        return row[0] if row else None
+
+    def set_key_output_dir(self, profile: str, key_id: str, output_dir: str | None) -> bool:
+        output_dir = self._output_dir(output_dir)
+        with self.lock, self.db:
+            return self.db.execute("UPDATE api_keys SET output_dir=? WHERE profile=? AND id=? AND revoked=0",
+                                   (output_dir, profile, key_id)).rowcount > 0
+
+    def reserve_output_path(self, profile: str, key_id: str, item_id: str,
+                            directory: Path, filename: str) -> Path:
+        directory = directory.resolve()
+        with self.lock, self.db:
+            row = self.db.execute("SELECT path FROM media_paths WHERE profile=? AND key_id=? AND id=?",
+                                  (profile, key_id, item_id)).fetchone()
+            if row and Path(row[0]).parent == directory:
+                return Path(row[0])
+            if row:
+                self.db.execute("DELETE FROM media_paths WHERE profile=? AND key_id=? AND id=?",
+                                (profile, key_id, item_id))
+            stem, suffix = Path(filename).stem, Path(filename).suffix
+            index = 1
+            while True:
+                name = filename if index == 1 else f"{stem} ({index}){suffix}"
+                candidate = directory / name
+                reserved = self.db.execute("SELECT 1 FROM media_paths WHERE path=?", (str(candidate),)).fetchone()
+                if not reserved and not candidate.exists():
+                    self.db.execute("INSERT INTO media_paths VALUES (?, ?, ?, ?)",
+                                    (profile, key_id, item_id, str(candidate)))
+                    return candidate
+                index += 1
+
+    def release_output_path(self, profile: str, key_id: str, item_id: str, path: Path) -> None:
+        with self.lock, self.db:
+            self.db.execute("DELETE FROM media_paths WHERE profile=? AND key_id=? AND id=? AND path=?",
+                            (profile, key_id, item_id, str(path)))
 
     def authenticate_key(self, profile: str, secret: str) -> str | None:
         digest = hashlib.sha256(secret.encode()).hexdigest()

@@ -7,7 +7,7 @@ A standalone, self-hosted YouTube provider for the [Karaoke Eternal SongProvider
 - SongProvider v0 discovery, bearer authentication, NDJSON search, fetch/cancel, and SSE download status.
 - A curated karaoke profile with KaraFun, Sing King, Zoom Karaoke, Party Tyme, Party Tyme en Español, and KaraokeMedia. Each channel has a permanent YouTube ID and editable artist/title parsing rules. An empty channel list allows any channel; a nonempty list is enforced again before download.
 - Per-profile search terms, result count, output directory, resolution limits, and reorderable quality preferences. Karaoke output is MP4. A source below the minimum is rejected; a source above the chosen target is scaled down, never upscaled.
-- Multiple revocable API keys per profile, each identifying an isolated consumer with its own download state and output subdirectory.
+- Multiple revocable API keys per profile, each identifying an isolated consumer with its own download state and optional output directory.
 - A separate local administration listener for profiles, parsing previews, API keys, password changes, and manual or scheduled yt-dlp updates (`stable` or `nightly`).
 - SQLite persistence and Docker support for `amd64` and `arm64`.
 
@@ -23,7 +23,7 @@ docker compose up -d
 
 Open `http://127.0.0.1:3031` to sign in. Create a key for the `karaoke` profile and copy it immediately; only its hash is stored. Configure the consumer with the base URL `http://127.0.0.1:3030/profiles/karaoke` and the new key. When the consumer runs in another container, use an address reachable from that container, such as the provider's name on a shared Docker network.
 
-Compose keeps SQLite and update packages in the `youtube-provider-state` volume. Finished files go to the separate `youtube-provider-media` volume, initially under `/media/karaoke/<client-id>/`. A consumer that ingests files must mount **only the media volume at the same absolute path** (`/media`) and configure that path as a library folder. Do not mount the state volume into consumers because it holds credential hashes and administrative sessions.
+Compose keeps SQLite and update packages in the `youtube-provider-state` volume. Finished files go to the separate `youtube-provider-media` volume, initially under `/media/karaoke/`. A consumer that ingests files must mount **only the media volume at the same absolute path** (`/media`) and configure that path as a library folder. Do not mount the state volume into consumers because it holds credential hashes and administrative sessions.
 
 For a remote consumer, publish the API behind HTTPS. Configure `YSP_PUBLIC_BASE_URL` with the externally reachable origin, such as `https://songs.example.com`, so the source icon URL works in end-user browsers. Disable reverse-proxy buffering for search and status streams. The administration port is intended to stay local; exposing it through a separately secured reverse proxy is an operator decision.
 
@@ -61,6 +61,8 @@ Profiles can be cloned and deleted from administration. At least one profile mus
 Each channel has ordered parsing rules. A rule is a regular expression with named capture groups and templates for `artist` and `title`. For example, `(?P<artist>.+) - (?P<title>.+)` with `{artist}` and `{title}`. Rules are tried in order for the matching channel; a conservative fallback is used when none matches. The preview panel tests unsaved rules with a sample title. Rules are evaluated with a timeout.
 
 Minimum and maximum resolution use preset dropdowns (`144p` through `4320p`, or no limit). The interface generates the resolutions between those limits and lets you drag them into preference order. A selected source is remuxed to MP4 when its codecs are compatible, or transcoded with FFmpeg when scaling or codec conversion is needed. Profile edits apply to new jobs; running jobs retain their original configuration.
+
+Each client key can have its own absolute output directory, set when creating the key or edited later. Leave it blank to use the profile's directory. In Docker, custom directories should be writable by the provider and mounted persistently. New files use clean names such as `Elton John - Your Song.mp4`; when a name is already used, the provider reserves `Elton John - Your Song (2).mp4` and so on. Existing files are not renamed or moved. A completed item requested again by the same key keeps its existing path; folder changes apply to new downloads.
 
 ## SongProvider API
 

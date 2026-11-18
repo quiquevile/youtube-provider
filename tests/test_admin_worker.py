@@ -48,9 +48,25 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
             secret = created.json()["secret"]
             assert store.authenticate_key("karaoke", secret) == created.json()["id"]
             assert secret not in json.dumps((await client.get("/admin/api/state")).json())
+            folder_url = f"/admin/api/profiles/karaoke/keys/{created.json()['id']}"
+            assert (await client.put(folder_url, json={"output_dir": str(tmp_path / "client")})).status_code == 403
+            assert (await client.put(folder_url, headers=headers, json={"output_dir": "relative"})).status_code == 400
+            assert (await client.put(folder_url, headers=headers,
+                                     json={"output_dir": str(tmp_path / "client")})).status_code == 200
+            assert store.key_output_dir("karaoke", created.json()["id"]) == str(tmp_path / "client")
+            keys = (await client.get("/admin/api/state")).json()["keys"]["karaoke"]
+            assert next(key for key in keys if key["id"] == created.json()["id"])["output_dir"] == str(tmp_path / "client")
+            assert (await client.put(folder_url, headers=headers, json={"output_dir": None})).status_code == 200
+            assert store.key_output_dir("karaoke", created.json()["id"]) is None
             revoked = await client.delete(f"/admin/api/profiles/karaoke/keys/{created.json()['id']}", headers=headers)
             assert revoked.status_code == 200
             assert store.authenticate_key("karaoke", secret) is None
+            assert (await client.post("/admin/api/profiles/karaoke/keys", headers=headers,
+                                      json={"label": "invalid folder", "output_dir": "relative"})).status_code == 400
+            new_key = await client.post("/admin/api/profiles/karaoke/keys", headers=headers,
+                                        json={"label": "other client", "output_dir": str(tmp_path / "other")})
+            assert new_key.status_code == 200
+            assert store.key_output_dir("karaoke", new_key.json()["id"]) == str(tmp_path / "other")
             assert (await client.post("/admin/api/updates/config", headers=headers,
                                       json={"channel": "nightly", "interval_hours": 24})).status_code == 200
             assert updater.channel == "nightly" and updater.interval_hours == 24
