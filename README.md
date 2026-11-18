@@ -1,13 +1,13 @@
-# YouTube Song Provider
+# YouTube Song Provider for Karaoke Eternal
 
-A standalone, self-hosted YouTube provider for the [Karaoke Eternal SongProvider v0 API](https://github.com/bhj/reference-provider-song). The HTTP API serves one or more independently configured profiles; the included `karaoke` profile is ready to edit in the local administration interface. The project is licensed under [ISC](LICENSE).
+A standalone, self-hosted YouTube provider designed for [Karaoke Eternal's SongProvider v0 API](https://github.com/bhj/reference-provider-song). It is developed and deployed separately from Karaoke Eternal, but its current supported use case is finding and downloading karaoke videos for Karaoke Eternal. Profiles let you vary karaoke channels, search terms, and output settings; support for other media types or client applications is outside the project's current scope. The included `karaoke` profile is ready to edit in the local administration interface. The project is licensed under [ISC](LICENSE).
 
 ## Features
 
 - SongProvider v0 discovery, bearer authentication, NDJSON search, fetch/cancel, and SSE download status.
 - A curated karaoke profile with KaraFun, Sing King, Zoom Karaoke, Party Tyme, Party Tyme en Español, and KaraokeMedia. Each channel has a permanent YouTube ID and editable artist/title parsing rules. An empty channel list allows any channel; a nonempty list is enforced again before download.
 - Per-profile search terms, result count, output directory, resolution limits, and reorderable quality preferences. Karaoke output is MP4. A source below the minimum is rejected; a source above the chosen target is scaled down, never upscaled.
-- Multiple revocable API keys per profile, each identifying an isolated consumer with its own download state and optional output directory.
+- Multiple revocable API keys per profile, each identifying a Karaoke Eternal instance with its own download state and optional output directory.
 - A separate local administration listener for profiles, parsing previews, API keys, password changes, and manual or scheduled yt-dlp updates (`stable` or `nightly`).
 - SQLite persistence and Docker support for `amd64` and `arm64`.
 
@@ -21,11 +21,11 @@ docker compose run --rm provider youtube-song-provider admin set-password
 docker compose up -d
 ```
 
-Open `http://127.0.0.1:3031` to sign in. Create a key for the `karaoke` profile and copy it immediately; only its hash is stored. Configure the consumer with the base URL `http://127.0.0.1:3030/profiles/karaoke` and the new key. When the consumer runs in another container, use an address reachable from that container, such as the provider's name on a shared Docker network.
+Open `http://127.0.0.1:3031` to sign in. Create a key for the `karaoke` profile and copy it immediately; only its hash is stored. Configure Karaoke Eternal with the base URL `http://127.0.0.1:3030/profiles/karaoke` and the new key. When Karaoke Eternal runs in another container, use an address reachable from that container, such as the provider's name on a shared Docker network.
 
-Compose keeps SQLite and update packages in the `youtube-provider-state` volume. Finished files go to the separate `youtube-provider-media` volume, initially under `/media/karaoke/`. A consumer that ingests files must mount **only the media volume at the same absolute path** (`/media`) and configure that path as a library folder. Do not mount the state volume into consumers because it holds credential hashes and administrative sessions.
+Compose keeps SQLite and update packages in the `youtube-provider-state` volume. Finished files go to the separate `youtube-provider-media` volume, initially under `/media/karaoke/`. When Karaoke Eternal also runs in Docker, mount **only the media volume at the same absolute path** (`/media`) and configure that path as a library folder. Do not mount the state volume into Karaoke Eternal because it holds credential hashes and administrative sessions.
 
-For a remote consumer, publish the API behind HTTPS. Configure `YSP_PUBLIC_BASE_URL` with the externally reachable origin, such as `https://songs.example.com`, so the source icon URL works in end-user browsers. Disable reverse-proxy buffering for search and status streams. The administration port is intended to stay local; exposing it through a separately secured reverse proxy is an operator decision.
+If Karaoke Eternal runs on another host, publish the API behind HTTPS and arrange shared access to the media directory: completed events contain provider-side file paths, not downloadable URLs. Configure `YSP_PUBLIC_BASE_URL` with the externally reachable origin, such as `https://songs.example.com`, so the source icon URL works in end-user browsers. Disable reverse-proxy buffering for search and status streams. The administration port is intended to stay local; exposing it through a separately secured reverse proxy is an operator decision.
 
 ## Local development
 
