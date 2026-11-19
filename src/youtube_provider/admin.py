@@ -35,7 +35,8 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        # Form POSTs need their own Origin on HTTP LAN hosts where browsers omit Sec-Fetch-Site.
+        response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'"
         return response
 

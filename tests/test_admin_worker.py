@@ -21,17 +21,20 @@ def test_first_visit_sets_password_and_signs_in_only_once(tmp_path):
     transport = httpx.ASGITransport(app=create_admin(service, Updater(store)))
 
     async def exercise():
-        async with (httpx.AsyncClient(transport=transport, base_url="http://localhost") as first,
-                    httpx.AsyncClient(transport=transport, base_url="http://localhost") as second):
+        origin = "http://karaoke.lan:53031"
+        async with (httpx.AsyncClient(transport=transport, base_url=origin) as first,
+                    httpx.AsyncClient(transport=transport, base_url=origin) as second):
             for browser in (first, second):
                 page = await browser.get("/", follow_redirects=True)
                 assert 'action="/setup"' in page.text
+                assert page.headers["referrer-policy"] == "same-origin"
                 assert (await browser.get("/admin/api/state")).status_code == 401
 
             password = "first-admin-password"
             form = {"password": password, "confirm": password}
-            blocked = await first.post("/setup", data=form, headers={"Origin": "https://elsewhere.example"})
-            assert blocked.status_code == 403
+            for foreign_origin in ("https://elsewhere.example", "null"):
+                blocked = await first.post("/setup", data=form, headers={"Origin": foreign_origin})
+                assert blocked.status_code == 403
             for invalid in ({"password": "short", "confirm": "short"}, {**form, "confirm": "different"}):
                 reply = await first.post("/setup", data=invalid)
                 assert reply.status_code == 400
@@ -39,15 +42,19 @@ def test_first_visit_sets_password_and_signs_in_only_once(tmp_path):
                 assert password not in reply.text
             assert store.setting("admin_password_hash") is None
 
-            created = await first.post("/setup", data=form)
+            # Browsers on plain HTTP LAN addresses can omit Sec-Fetch-Site.
+            created = await first.post("/setup", data=form, headers={"Origin": origin})
             assert created.status_code == 303 and created.headers["location"] == "/"
             assert (await first.get("/admin/api/state")).status_code == 200
 
             stale = await second.post("/setup", data={"password": "second-password", "confirm": "second-password"})
             assert stale.headers["location"] == "/login"
             assert (await second.get("/admin/api/state")).status_code == 401
-            assert 'action="/login"' in (await second.get("/login")).text
-            assert (await second.post("/login", data={"password": password})).status_code == 303
+            login_page = await second.get("/login")
+            assert 'action="/login"' in login_page.text
+            assert login_page.headers["referrer-policy"] == "same-origin"
+            assert (await second.post("/login", data={"password": password},
+                                      headers={"Origin": origin})).status_code == 303
 
     try:
         asyncio.run(exercise())

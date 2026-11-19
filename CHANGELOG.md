@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- First-time admin password setup and sign-in work when the browser opens the provider by its LAN address over HTTP.
 - A failed channel search no longer discards matches from other channels, and a top-level YouTube failure no longer appears as an empty successful search.
 - Download workers keep yt-dlp and child-process diagnostics out of the JSON event stream, preventing spurious download failures.
 - Admin login and configuration requests work through local port forwarding that changes the internal request origin, while cross-site browser requests remain blocked.
