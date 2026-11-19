@@ -29,6 +29,6 @@ python3 -m venv .venv
 3. Add the provider's download folder to the Karaoke Eternal library. The default is `./data/downloads/karaoke` for a local installation or `/media/karaoke` with Compose. Both services must see the files at the **same absolute path**. With two containers, mount the existing `youtube-provider-media` volume at `/media` in Karaoke Eternal.
 4. Search by artist and title in Karaoke Eternal and download a song. Its MP4 appears in the library folder.
 
-In provider administration you can reorder allowed channels, set download quality and folders, and update yt-dlp manually or on a schedule.
+The default karaoke profile includes nine channels. In provider administration you can add or reorder channels, set download quality and folders, and update yt-dlp manually or on a schedule. Existing installations keep their saved channel list when upgrading.
 
 [ISC license](LICENSE)

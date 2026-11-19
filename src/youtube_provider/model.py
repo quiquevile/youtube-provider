@@ -170,5 +170,17 @@ def default_profile(output_dir: str) -> Profile:
             Channel(id="UCWLqO9ztz16a_Ko4YB9PnFQ", name="Party Tyme Karaoke", rules=[common]),
             Channel(id="UCgJdYYa_ikkx_2eU5pNU3nw", name="Party Tyme Karaoke en Español", language="es", rules=[common]),
             Channel(id="UCmV_ZCnAAj5DbkUqpBC_CDg", name="KaraokeMedia", language="es", rules=[media_flipped, common]),
+            Channel(id="UCu2boX8Y663cxXFe4dK4U6w", name="Karaoke Total Profesional", language="es", rules=[
+                ParseRule(pattern=r"^(?P<title>.+?)(?:\s+[-–—]\s*|[-–—]\s+)(?P<artist>.+?)\s*(?:[-–—]\s*)?\(?\bKaraoke\b.*$",
+                          artist="{artist}", title="{title}"),
+            ]),
+            Channel(id="UC5Zv8wTsCk3gVJcBcHmOPgg", name="KaraFun Karaoke - España", language="es", rules=[
+                ParseRule(pattern=r"^Karaoke\s+(?P<title>.+?)\s+[-–—]\s+(?P<artist>.+?)(?:\s*\*+)?$",
+                          artist="{artist}", title="{title}"),
+            ]),
+            Channel(id="UCYi9TC1HC_U2kaRAK6I4FSQ", name="Stingray Karaoke", rules=[
+                ParseRule(pattern=r"^(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)\s*\(Karaoke Version\)$",
+                          artist="{artist}", title="{title}"),
+            ]),
         ],
     )

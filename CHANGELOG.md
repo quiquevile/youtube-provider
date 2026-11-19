@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- New karaoke profiles include Karaoke Total Profesional, KaraFun Karaoke - España, and Stingray Karaoke with channel-specific artist and title rules.
 - On first launch, the administration page lets you create the admin password and signs you in immediately.
 - CI now smoke-tests the built image on each native architecture, including an H.264/AAC FFmpeg conversion.
 - GitHub Actions validation and native AMD64/ARM64 Docker Hub publishing for development, release, main, and version tags.
