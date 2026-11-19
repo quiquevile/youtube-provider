@@ -28,7 +28,8 @@ class ManagedServer(uvicorn.Server):
 async def serve(store: Store, args: argparse.Namespace) -> None:
     service = ProviderService(store, public_base_url=args.public_base_url, concurrency=args.concurrency)
     updater = Updater(store)
-    api = ManagedServer(uvicorn.Config(create_api(service), host=args.api_host, port=args.api_port,
+    api_app = create_api(service, icon_dir=args.icon_dir, icon_base_url=args.icon_base_url)
+    api = ManagedServer(uvicorn.Config(api_app, host=args.api_host, port=args.api_port,
                                        log_level="info", proxy_headers=False))
     admin = ManagedServer(uvicorn.Config(create_admin(service, updater, api_port=args.api_port,
                                                      cookie_secure=args.admin_cookie_secure),
@@ -65,6 +66,8 @@ def main() -> None:
     serve_parser.add_argument("--admin-host", default=os.environ.get("YSP_ADMIN_HOST", "127.0.0.1"))
     serve_parser.add_argument("--admin-port", type=int, default=int(os.environ.get("YSP_ADMIN_PORT", "3031")))
     serve_parser.add_argument("--public-base-url", default=os.environ.get("YSP_PUBLIC_BASE_URL"))
+    serve_parser.add_argument("--icon-dir", type=Path, default=os.environ.get("YSP_ICON_DIR"))
+    serve_parser.add_argument("--icon-base-url", default=os.environ.get("YSP_ICON_BASE_URL"))
     serve_parser.add_argument("--admin-cookie-secure", action="store_true",
                               default=os.environ.get("YSP_ADMIN_COOKIE_SECURE") == "1")
     serve_parser.add_argument("--concurrency", type=int, default=int(os.environ.get("YSP_CONCURRENCY", "2")))

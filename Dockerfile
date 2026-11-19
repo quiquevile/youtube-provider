@@ -36,7 +36,8 @@ COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=dependencies /opt/venv /opt/venv
 COPY --from=package /tmp/wheels/ /tmp/wheels/
 RUN python -m pip install --no-index --no-deps --no-cache-dir /tmp/wheels/*.whl \
-    && rm -rf /tmp/wheels
+    && rm -rf /tmp/wheels \
+    && mkdir -m 0777 /icons
 
 USER provider
 EXPOSE 3030 3031

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -93,7 +94,18 @@ def test_clean_media_names_are_reserved_without_overwriting_other_files(tmp_path
     reopened.close()
 
 
-def test_auth_discovery_fetch_validation_and_consumer_isolation(tmp_path: Path):
+@pytest.mark.parametrize("base", ["/assets", "ftp://host/icons", "https://user:pass@host/icons", "https://host/?x=1"])
+def test_icon_base_must_be_a_public_http_directory(tmp_path, base):
+    store = Store(tmp_path)
+    try:
+        with pytest.raises(ValueError, match="YSP_ICON_BASE_URL"):
+            create_api(ProviderService(store), icon_base_url=base)
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("icon_base", [None, "https://karaoke.example/assets/provider-icons/"])
+def test_auth_discovery_fetch_validation_and_consumer_isolation(tmp_path: Path, icon_base):
     store = Store(tmp_path)
     one_id, one_secret = store.add_key("karaoke", "one")
     two_id, two_secret = store.add_key("karaoke", "two")
@@ -110,7 +122,11 @@ def test_auth_discovery_fetch_validation_and_consumer_isolation(tmp_path: Path):
 
     service.search = fake_search
     async def exercise():
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_api(service)),
+        icon_dir = tmp_path / "shared-icons"
+        icon_dir.mkdir()
+        (icon_dir / "youtube.svg").write_bytes(b"old icon from previous deployment")
+        app = create_api(service, icon_dir=icon_dir, icon_base_url=icon_base)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
                                     base_url="http://localhost") as client:
             base = "/profiles/karaoke/api"
             assert (await client.get(base)).json()["types"] == {"song": {"versions": [0]}}
@@ -124,7 +140,12 @@ def test_auth_discovery_fetch_validation_and_consumer_isolation(tmp_path: Path):
             assert found.status_code == 200
             assert found.headers["content-type"].startswith("application/x-ndjson")
             assert json.loads(found.text)[0]["title"] == "Song"
-            assert (await client.get("/icons/youtube.svg")).status_code == 200
+            icon = await client.get("/icons/youtube.svg")
+            assert icon.status_code == 200 and icon.headers["content-type"] == "image/svg+xml"
+            assert icon.content.startswith(b"<svg") and (icon_dir / "youtube.svg").read_bytes() == icon.content
+            version = hashlib.sha256(icon.content).hexdigest()[:16]
+            expected = f"{icon_base}youtube.svg?v={version}" if icon_base else "http://localhost/icons/youtube.svg"
+            assert json.loads(found.text)[0]["iconUrl"] == expected
             fetch_url = base + "/song/v0/items/dQw4w9WgXcQ/fetch"
             assert (await client.post(fetch_url, headers=headers, json={"timestamp": -1})).status_code == 400
             assert (await client.post(fetch_url, headers=headers,

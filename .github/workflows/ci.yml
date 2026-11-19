@@ -103,7 +103,7 @@ jobs:
             test -s /tmp/smoke.mp4
             youtube-song-provider --help >/dev/null
           '
-      - name: Verify Compose identity and first-run database ownership
+      - name: Verify Compose identity, database ownership, and shared icons
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
@@ -112,6 +112,8 @@ jobs:
           docker compose -f compose.yaml -f - run --rm --no-deps -T -v "$state:/data" provider python -c '
           import os
           from pathlib import Path
+          from youtube_provider.api import create_api
+          from youtube_provider.service import ProviderService
           from youtube_provider.storage import Store
 
           directory = Path(os.environ["YSP_DATA_DIR"])
@@ -119,6 +121,7 @@ jobs:
           assert not database.exists()
           store = Store(directory)
           assert store.profile("karaoke") is not None
+          create_api(ProviderService(store), icon_dir=Path(os.environ["YSP_ICON_DIR"]))
           store.close()
           ' <<EOF
           services:
@@ -126,6 +129,8 @@ jobs:
               image: "${REGISTRY_IMAGE}@${IMAGE_DIGEST}"
           EOF
           test "$(stat -c '%u:%g' "$state/provider.sqlite3")" = "$PUID:$PGID"
+          docker run --rm --network none -v youtube-provider-icons:/app/assets/provider-icons:ro \
+            "${REGISTRY_IMAGE}@${IMAGE_DIGEST}" grep -q '<svg' /app/assets/provider-icons/youtube.svg
       - name: Export digest
         run: |
           mkdir -p /tmp/digests

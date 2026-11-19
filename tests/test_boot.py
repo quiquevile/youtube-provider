@@ -1,3 +1,4 @@
+import os
 import socket
 import subprocess
 import sys
@@ -26,7 +27,9 @@ def test_server_keeps_admin_and_song_api_on_separate_ports(tmp_path):
     api_port, admin_port = free_port(), free_port()
     command = [sys.executable, "-m", "youtube_provider.cli", "--data-dir", str(tmp_path), "serve",
                "--api-port", str(api_port), "--admin-port", str(admin_port)]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    icons = tmp_path / "shared-icons"
+    env = {**os.environ, "YSP_ICON_DIR": str(icons), "YSP_ICON_BASE_URL": "http://karaoke.example/assets/provider-icons"}
+    process = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
@@ -40,6 +43,8 @@ def test_server_keeps_admin_and_song_api_on_separate_ports(tmp_path):
         else:
             raise AssertionError("API did not become ready")
         assert database.is_file()
+        with urllib.request.urlopen(f"http://127.0.0.1:{api_port}/icons/youtube.svg", timeout=1) as response:
+            assert response.read() == (icons / "youtube.svg").read_bytes()
         assert get_status(f"http://127.0.0.1:{api_port}/profiles/karaoke/api") == 200
         assert get_status(f"http://127.0.0.1:{api_port}/admin/api/state") == 404
         assert get_status(f"http://127.0.0.1:{api_port}/setup") == 404

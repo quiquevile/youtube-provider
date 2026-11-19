@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- The provider publishes its icon to a shared directory on startup. Karaoke Eternal can serve it from its existing port, with a new image URL when the icon content changes.
 - New karaoke profiles include Karaoke Total Profesional, KaraFun Karaoke - España, Stingray Karaoke, and Kar@ke with channel-specific artist and title rules.
 - On first launch, the administration page lets you create the admin password and signs you in immediately.
 - CI now smoke-tests the built image on each native architecture, including an H.264/AAC FFmpeg conversion.

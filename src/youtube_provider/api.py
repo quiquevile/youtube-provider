@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import re
+from importlib.resources import files
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
@@ -28,8 +33,25 @@ async def _body(request: Request) -> dict | None:
     return body if isinstance(body, dict) else None
 
 
-def create_api(service: ProviderService) -> FastAPI:
+def create_api(service: ProviderService, *, icon_dir: Path | None = None, icon_base_url: str | None = None) -> FastAPI:
     app = FastAPI(title="YouTube SongProvider", docs_url=None, redoc_url=None, openapi_url=None)
+    svg = files("youtube_provider").joinpath("static/youtube.svg").read_bytes()
+    public_icon = None
+    if icon_base_url:
+        url = urlsplit(icon_base_url)
+        if url.scheme not in ("http", "https") or not url.hostname or url.query or url.fragment or url.username is not None:
+            raise ValueError("YSP_ICON_BASE_URL must be an absolute HTTP(S) directory URL without credentials, query or fragment")
+        version = hashlib.sha256(svg).hexdigest()[:16]
+        public_icon = f"{icon_base_url.rstrip('/')}/youtube.svg?v={version}"
+
+    directory = icon_dir or service.store.data_dir / "icons"
+    directory.mkdir(parents=True, exist_ok=True)
+    # Readers on the shared volume see either the previous icon or the complete update.
+    with TemporaryDirectory(dir=directory) as staging:
+        staged = Path(staging) / "youtube.svg"
+        staged.write_bytes(svg)
+        staged.chmod(0o644)
+        staged.replace(directory / staged.name)
 
     def auth(slug: str, request: Request):
         profile = service.store.profile(slug)
@@ -50,7 +72,6 @@ def create_api(service: ProviderService) -> FastAPI:
 
     @app.get("/icons/youtube.svg")
     async def icon():
-        svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="3" y="10" width="58" height="44" rx="12" fill="#e21b23"/><path d="M26 21v22l18-11z" fill="white"/></svg>'
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/profiles/{slug}/api")
@@ -79,7 +100,7 @@ def create_api(service: ProviderService) -> FastAPI:
             return _error(400, "query is too long")
         if not service.allowed(slug, key_id, "search", 10):
             return _error(429, "Search rate limit exceeded")
-        icon_url = service.icon_url(str(request.base_url))
+        icon_url = public_icon or service.icon_url(str(request.base_url))
         return StreamingResponse(service.search(profile, query, icon_url), media_type="application/x-ndjson",
                                  headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
 

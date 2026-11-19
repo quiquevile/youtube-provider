@@ -9,11 +9,14 @@ services:
     environment:
       YSP_DATA_DIR: /data
       YSP_OUTPUT_ROOT: /media
+      YSP_ICON_DIR: /icons
+      YSP_ICON_BASE_URL: "${YSP_ICON_BASE_URL:-}"
       YSP_API_HOST: 0.0.0.0
       YSP_ADMIN_HOST: 0.0.0.0
     volumes:
       - provider-state:/data
       - provider-media:/media
+      - provider-icons:/icons
     cap_drop:
       - ALL
     security_opt:
@@ -25,3 +28,5 @@ volumes:
     name: youtube-provider-state
   provider-media:
     name: youtube-provider-media
+  provider-icons:
+    name: youtube-provider-icons
