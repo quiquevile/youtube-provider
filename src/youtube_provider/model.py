@@ -182,5 +182,9 @@ def default_profile(output_dir: str) -> Profile:
                 ParseRule(pattern=r"^(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)\s*\(Karaoke Version\)$",
                           artist="{artist}", title="{title}"),
             ]),
+            Channel(id="UCkQmmoZPHkgj2J5YxyoxRRA", name="Kar@ke", language="es", rules=[
+                ParseRule(pattern=r"^(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)\s*\(Kar@ke\)$",
+                          artist="{artist}", title="{title}"),
+            ]),
         ],
     )

@@ -14,8 +14,8 @@ def profile(tmp_path: Path) -> Profile:
 def test_default_profile_has_strict_curated_channels(tmp_path):
     configured = profile(tmp_path)
     assert configured.slug == "karaoke"
-    assert len(configured.channels) == 9
-    assert len({channel.id for channel in configured.channels}) == 9
+    assert len(configured.channels) == 10
+    assert len({channel.id for channel in configured.channels}) == 10
     assert configured.quality_order == [1080, 720, 480]
 
 
@@ -42,6 +42,9 @@ def test_channel_rules_override_generic_artist_title(tmp_path):
     ("UCYi9TC1HC_U2kaRAK6I4FSQ", "Billie Eilish - L'Amour De Ma Vie [Extended Edit] (Karaoke Version)",
      "Billie Eilish", "L'Amour De Ma Vie [Extended Edit]"),
     ("UCYi9TC1HC_U2kaRAK6I4FSQ", "Kate Bush – Wuthering Heights (Karaoke Version)", "Kate Bush", "Wuthering Heights"),
+    ("UCkQmmoZPHkgj2J5YxyoxRRA", "El Pele y Vicente Amigo – Llámale amor (Rumba) (Kar@ke)",
+     "El Pele y Vicente Amigo", "Llámale amor (Rumba)"),
+    ("UCkQmmoZPHkgj2J5YxyoxRRA", "Jarabe de palo - Grita (Kar@ke)", "Jarabe de palo", "Grita"),
 ])
 def test_new_karaoke_channel_rules(tmp_path, channel_id, raw, artist, title):
     channel = next(channel for channel in profile(tmp_path).channels if channel.id == channel_id)

@@ -79,7 +79,7 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
             assert login.cookies.get("admin_session")
             state = (await client.get("/admin/api/state")).json()
             assert state["api_base_url"] == "http://127.0.0.1:3030"
-            assert len(state["profiles"][0]["channels"]) == 9
+            assert len(state["profiles"][0]["channels"]) == 10
             page = await client.get("/")
             assert page.status_code == 200
             assert page.text.count("Browse…") == 2
