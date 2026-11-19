@@ -36,4 +36,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- The Docker image requires Alpine's patched OpenSSL libraries (3.5.9-r1 or later) for CVE-2026-88823, CVE-2026-95691, CVE-2026-95692, and CVE-2026-107496.
 - Removed npm and its unused dependency tree from the runtime image; Alpine system packages and the pip used by yt-dlp updates are upgraded during the build.

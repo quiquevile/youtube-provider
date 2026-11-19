@@ -4,6 +4,7 @@ FROM node:24-alpine AS node-runtime
 FROM alpine:3.24 AS runtime-base
 RUN apk upgrade --no-cache \
     && apk add --no-cache ca-certificates ffmpeg libstdc++ python3 \
+        'libcrypto3>=3.5.9-r1' 'libssl3>=3.5.9-r1' \
     && addgroup -S -g 10001 provider \
     && adduser -S -D -u 10001 -G provider -h /app provider \
     && mkdir -p /data /media \
