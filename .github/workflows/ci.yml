@@ -103,6 +103,29 @@ jobs:
             test -s /tmp/smoke.mp4
             youtube-song-provider --help >/dev/null
           '
+      - name: Verify Compose identity and first-run database ownership
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          export PUID="$(id -u)" PGID="$(id -g)"
+          state=$(mktemp -d)
+          docker compose -f compose.yaml -f - run --rm --no-deps -T -v "$state:/data" provider python -c '
+          import os
+          from pathlib import Path
+          from youtube_provider.storage import Store
+
+          directory = Path(os.environ["YSP_DATA_DIR"])
+          database = directory / "provider.sqlite3"
+          assert not database.exists()
+          store = Store(directory)
+          assert store.profile("karaoke") is not None
+          store.close()
+          ' <<EOF
+          services:
+            provider:
+              image: "${REGISTRY_IMAGE}@${IMAGE_DIGEST}"
+          EOF
+          test "$(stat -c '%u:%g' "$state/provider.sqlite3")" = "$PUID:$PGID"
       - name: Export digest
         run: |
           mkdir -p /tmp/digests

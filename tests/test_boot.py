@@ -21,6 +21,8 @@ def get_status(url):
 
 
 def test_server_keeps_admin_and_song_api_on_separate_ports(tmp_path):
+    database = tmp_path / "provider.sqlite3"
+    assert not database.exists()
     api_port, admin_port = free_port(), free_port()
     command = [sys.executable, "-m", "youtube_provider.cli", "--data-dir", str(tmp_path), "serve",
                "--api-port", str(api_port), "--admin-port", str(admin_port)]
@@ -37,6 +39,7 @@ def test_server_keeps_admin_and_song_api_on_separate_ports(tmp_path):
                 time.sleep(0.1)
         else:
             raise AssertionError("API did not become ready")
+        assert database.is_file()
         assert get_status(f"http://127.0.0.1:{api_port}/profiles/karaoke/api") == 200
         assert get_status(f"http://127.0.0.1:{api_port}/admin/api/state") == 404
         assert get_status(f"http://127.0.0.1:{api_port}/setup") == 404

@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Docker Compose uses `PUID` and `PGID` to run the provider and create its database and downloads with the configured ownership. Both IDs default to 10001.
 - README now guides users from Docker or local installation through connecting Karaoke Eternal, sharing the download folder, and downloading their first song.
 - The runtime container now uses Alpine with Python, FFmpeg, and only the Node.js executable. Docker build stages cache Python dependencies before copying application code, and the build context excludes local files.
 - Python packaging now requires Pydantic 2 explicitly, including on ARM64 builds.

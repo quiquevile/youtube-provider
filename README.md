@@ -12,6 +12,8 @@ Run one of the following from the repository directory.
 docker compose up -d --build
 ```
 
+For host-mounted folders, set `PUID` and `PGID` in the Compose `.env` to their owner's numeric IDs (default `10001:10001`). In your own Compose service, add `user: "${PUID:-10001}:${PGID:-10001}"`. The selected user needs write access to the data and download directories. The provider creates `/data/provider.sqlite3` on first startup.
+
 **Without Docker** (requires Python 3.12+, Node.js 22+, FFmpeg and FFprobe)
 
 ```sh
