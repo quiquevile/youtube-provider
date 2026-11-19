@@ -15,6 +15,46 @@ from youtube_provider.updater import Updater
 from youtube_provider import worker
 
 
+def test_first_visit_sets_password_and_signs_in_only_once(tmp_path):
+    store = Store(tmp_path)
+    service = ProviderService(store)
+    transport = httpx.ASGITransport(app=create_admin(service, Updater(store)))
+
+    async def exercise():
+        async with (httpx.AsyncClient(transport=transport, base_url="http://localhost") as first,
+                    httpx.AsyncClient(transport=transport, base_url="http://localhost") as second):
+            for browser in (first, second):
+                page = await browser.get("/", follow_redirects=True)
+                assert 'action="/setup"' in page.text
+                assert (await browser.get("/admin/api/state")).status_code == 401
+
+            password = "first-admin-password"
+            form = {"password": password, "confirm": password}
+            blocked = await first.post("/setup", data=form, headers={"Origin": "https://elsewhere.example"})
+            assert blocked.status_code == 403
+            for invalid in ({"password": "short", "confirm": "short"}, {**form, "confirm": "different"}):
+                reply = await first.post("/setup", data=invalid)
+                assert reply.status_code == 400
+                assert 'action="/setup"' in reply.text
+                assert password not in reply.text
+            assert store.setting("admin_password_hash") is None
+
+            created = await first.post("/setup", data=form)
+            assert created.status_code == 303 and created.headers["location"] == "/"
+            assert (await first.get("/admin/api/state")).status_code == 200
+
+            stale = await second.post("/setup", data={"password": "second-password", "confirm": "second-password"})
+            assert stale.headers["location"] == "/login"
+            assert (await second.get("/admin/api/state")).status_code == 401
+            assert 'action="/login"' in (await second.get("/login")).text
+            assert (await second.post("/login", data={"password": password})).status_code == 303
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        store.close()
+
+
 def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Path):
     store = Store(tmp_path)
     store.set_setting("admin_password_hash", HASHER.hash("long-test-password"))

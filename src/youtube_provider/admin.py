@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections
 import os
 import time
+from html import escape
 from importlib.resources import files
 from pathlib import Path
 
@@ -63,8 +64,39 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
             return None, denied(403, "Cross-origin request blocked")
         return csrf, None
 
+    def signed_in():
+        token, _ = service.store.create_session()
+        response = RedirectResponse("/", status_code=303)
+        response.set_cookie("admin_session", token, httponly=True, secure=cookie_secure,
+                            samesite="strict", max_age=8 * 3600, path="/")
+        return response
+
+    def setup_form(error: str = ""):
+        page = static.joinpath("setup.html").read_text(encoding="utf-8")
+        if error:
+            page = page.replace("<!-- validation -->", f'<p role="alert">{escape(error)}</p>')
+        return HTMLResponse(page, status_code=400 if error else 200)
+
+    @app.post("/setup")
+    async def setup(request: Request):
+        if not same_origin(request):
+            return HTMLResponse("Invalid request", status_code=403)
+        if service.store.setting("admin_password_hash") is not None:
+            return RedirectResponse("/login", status_code=303)
+        form = await request.form()
+        password = form.get("password")
+        if not isinstance(password, str) or len(password) < 12:
+            return setup_form("Use at least 12 characters.")
+        if password != form.get("confirm"):
+            return setup_form("Passwords do not match. Enter them again.")
+        if not service.store.initialize_admin_password(HASHER.hash(password)):
+            return RedirectResponse("/login", status_code=303)
+        return signed_in()
+
     @app.get("/login")
     async def login_page():
+        if service.store.setting("admin_password_hash") is None:
+            return setup_form()
         return HTMLResponse("""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Provider login</title><link rel="stylesheet" href="/static/admin.css"><main><h1>YouTube Provider</h1><form method="post" action="/login"><label>Admin password <input type="password" name="password" required autofocus></label><button>Sign in</button></form></main></html>""")
 
     @app.post("/login")
@@ -90,11 +122,7 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
             recent.append(time.monotonic())
             return HTMLResponse("Invalid password", status_code=401)
         recent.clear()
-        token, _ = service.store.create_session()
-        response = RedirectResponse("/", status_code=303)
-        response.set_cookie("admin_session", token, httponly=True, secure=cookie_secure,
-                            samesite="strict", max_age=8 * 3600, path="/")
-        return response
+        return signed_in()
 
     @app.get("/")
     async def index(request: Request):

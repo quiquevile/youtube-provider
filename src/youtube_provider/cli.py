@@ -83,8 +83,6 @@ def main() -> None:
                 parser.error("concurrency must be between 1 and 16")
             if args.api_port == args.admin_port and args.api_host == args.admin_host:
                 parser.error("API and administration must use different listeners")
-            if not store.setting("admin_password_hash"):
-                parser.error("set the admin password first: youtube-song-provider admin set-password")
             asyncio.run(serve(store, args))
     finally:
         store.close()

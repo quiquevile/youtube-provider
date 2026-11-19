@@ -216,6 +216,14 @@ class Store:
         with self.lock, self.db:
             self.db.execute("INSERT INTO settings VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET value=excluded.value", (name, value))
 
+    def initialize_admin_password(self, password_hash: str) -> bool:
+        with self.lock, self.db:
+            result = self.db.execute(
+                "INSERT INTO settings (name, value) VALUES ('admin_password_hash', ?) ON CONFLICT(name) DO NOTHING",
+                (password_hash,),
+            )
+            return result.rowcount == 1
+
     def create_session(self) -> tuple[str, str]:
         token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(24)

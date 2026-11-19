@@ -1,7 +1,9 @@
 import asyncio
 import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import httpx
 import pytest
@@ -9,6 +11,30 @@ import pytest
 from youtube_provider.api import create_api
 from youtube_provider.service import ProviderService, ndjson_lines, video_id_from_query
 from youtube_provider.storage import Store
+
+
+def test_concurrent_password_setup_persists_only_the_first_hash(tmp_path):
+    barrier = Barrier(2)
+
+    def submit(store, candidate):
+        barrier.wait(timeout=5)
+        return store.initialize_admin_password(candidate)
+
+    stores = [Store(tmp_path), Store(tmp_path)]
+    candidates = ["first-hash", "second-hash"]
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            accepted = list(pool.map(submit, stores, candidates))
+        assert accepted.count(True) == 1
+    finally:
+        for store in stores:
+            store.close()
+
+    reopened = Store(tmp_path)
+    try:
+        assert reopened.setting("admin_password_hash") == candidates[accepted.index(True)]
+    finally:
+        reopened.close()
 
 
 def test_keys_are_profile_scoped_and_revocable(tmp_path: Path):
