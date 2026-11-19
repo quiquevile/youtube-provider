@@ -27,7 +27,7 @@ python3 -m venv .venv
 1. Open [provider administration](http://127.0.0.1:3031). On the first visit, choose an admin password of at least 12 characters. Once signed in, create an API key for the `karaoke` profile and copy it while it is visible.
 2. In Karaoke Eternal, add a song provider with that key and the base URL `http://127.0.0.1:3030/profiles/karaoke`. If both services run in containers on a shared Docker network, use `http://provider:3030/profiles/karaoke`.
 3. Add the provider's download folder to the Karaoke Eternal library. The default is `./data/downloads/karaoke` for a local installation or `/media/karaoke` with Compose. Both services must see the files at the **same absolute path**. With two containers, mount the existing `youtube-provider-media` volume at `/media` in Karaoke Eternal.
-4. Search by artist and title in Karaoke Eternal and download a song. Its MP4 appears in the library folder.
+4. Search by artist and title in Karaoke Eternal and download a song. Its MP4 appears in the library folder. For profiles that allow any channel, the result's source shows the channel name or, if unavailable, the uploader.
 
 **Icons with Docker.** The provider writes the bundled icon on startup. In a shared Compose project, mount the same volume at `/icons` in the provider and at `/app/assets/provider-icons:ro` in Karaoke Eternal. Set `YSP_ICON_DIR=/icons` and `YSP_ICON_BASE_URL=http://YOUR-SERVER:3754/assets/provider-icons` on the provider, using the Karaoke Eternal address your browsers can reach. Keep the internal provider URL from step 2. The included Compose file declares the volume as `provider-icons` (Docker name `youtube-provider-icons`).
 

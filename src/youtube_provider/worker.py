@@ -150,9 +150,12 @@ def search(request: dict) -> None:
             if not score:
                 continue
             duration = entry.get("duration")
+            source_name = matched_channel.name if matched_channel else (
+                str(entry.get("channel") or "").strip() or str(entry.get("uploader") or "").strip() or "YouTube"
+            )
             result = {
                 "id": video_id, "title": song[:1024], "artist": artist[:1024],
-                "source": (matched_channel.name if matched_channel else str(entry.get("channel") or "YouTube"))[:1024],
+                "source": source_name[:1024],
                 "channel_id": actual_id, "raw_title": title[:1024],
             }
             if isinstance(duration, (int, float)) and duration > 0:

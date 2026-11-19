@@ -393,9 +393,18 @@ def test_update_scheduler_starts_due_job_and_stops(tmp_path):
     store.close()
 
 
-def test_unrestricted_profile_accepts_any_channel_but_restricted_profile_does_not(tmp_path, monkeypatch):
+@pytest.mark.parametrize("metadata, expected_source", [
+    ({"channel": "Channel name", "uploader": "Uploader name"}, "Channel name"),
+    ({"uploader": "Uploader name"}, "Uploader name"),
+    ({"channel": " ", "uploader": "Uploader name"}, "Uploader name"),
+    ({}, "YouTube"),
+])
+def test_unrestricted_profile_accepts_any_channel_but_restricted_profile_does_not(
+    tmp_path, monkeypatch, metadata, expected_source,
+):
     profile = default_profile(str(tmp_path / "downloads"))
     emitted = []
+    entry = {"id": "dQw4w9WgXcQ", "title": "Artist - Song", "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx", **metadata}
 
     class FakeYdl:
         def __init__(self, options):
@@ -409,10 +418,8 @@ def test_unrestricted_profile_accepts_any_channel_but_restricted_profile_does_no
 
         def extract_info(self, query, download=False):
             if query.startswith("ytsearch") or "/search?query=" in query:
-                return {"entries": [{"id": "dQw4w9WgXcQ", "title": "Artist - Song",
-                                     "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx", "channel": "Unknown"}]}
-            return {"id": "dQw4w9WgXcQ", "title": "Artist - Song",
-                    "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx", "channel": "Unknown"}
+                return {"entries": [entry]}
+            return entry
 
     monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
     monkeypatch.setattr(worker, "emit", emitted.append)
@@ -421,6 +428,9 @@ def test_unrestricted_profile_accepts_any_channel_but_restricted_profile_does_no
     profile.channels = []
     worker.search({"profile": profile.model_dump(), "query": "Song"})
     assert emitted[-1]["items"][0]["artist"] == "Artist"
+    assert emitted[-1]["items"][0]["source"] == expected_source
+    worker.search({"profile": profile.model_dump(), "query": "https://youtu.be/dQw4w9WgXcQ", "video_id": entry["id"]})
+    assert emitted[-1]["items"][0]["source"] == expected_source
 
 
 def test_worker_download_rechecks_channel_and_writes_atomic_mp4(tmp_path, monkeypatch):
