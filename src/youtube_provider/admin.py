@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
 
-from .model import Profile, parse_metadata
+from .model import Profile, default_parse_rule, parse_metadata
 from .service import ProviderService
 from .updater import Updater
 
@@ -149,6 +149,7 @@ def create_admin(service: ProviderService, updater: Updater, *, api_port: int = 
         profiles = service.store.profiles()
         return {"csrf": csrf,
                 "api_base_url": service.public_base_url or f"http://127.0.0.1:{api_port}",
+                "default_parse_rule": default_parse_rule().model_dump(),
                 "profiles": [profile.model_dump() for profile in profiles],
                 "keys": {profile.slug: service.store.keys(profile.slug) for profile in profiles},
                 "update": {"status": updater.status, "message": updater.message,

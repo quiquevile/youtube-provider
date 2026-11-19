@@ -31,4 +31,6 @@ python3 -m venv .venv
 
 The default karaoke profile includes ten channels. In provider administration you can add or reorder channels, set download quality and folders, and update yt-dlp manually or on a schedule. Existing installations keep their saved channel list when upgrading.
 
+**Add parsing rule** starts with an editable `Artist - Title` pattern and the templates `{artist}` and `{title}`.
+
 [ISC license](LICENSE)

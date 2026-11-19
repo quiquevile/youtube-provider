@@ -140,7 +140,7 @@ function field(labelText, value, className) {
   return label;
 }
 
-function ruleRow(rule = { pattern: '', artist: '', title: '' }) {
+function ruleRow(rule = state.default_parse_rule) {
   const row = el('div', { class: 'rule' });
   row.append(field('Pattern (named groups)', rule.pattern, 'rule-pattern'),
              field('Artist template', rule.artist, 'rule-artist'),

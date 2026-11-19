@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- New channel parsing rules start with the preset's artist–title pattern and both output templates already filled in.
 - GitHub Actions now uses Node.js 24 actions for validation, Docker builds, and image publishing.
 - Docker Compose uses `PUID` and `PGID` to run the provider and create its database and downloads with the configured ownership. Both IDs default to 10001.
 - README now guides users from Docker or local installation through connecting Karaoke Eternal, sharing the download folder, and downloading their first song.

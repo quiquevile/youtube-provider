@@ -156,8 +156,13 @@ def parse_metadata(video_title: str, channel: Channel | None) -> tuple[str, str]
     return (channel.name if channel else ""), cleaned or title
 
 
+def default_parse_rule() -> ParseRule:
+    return ParseRule(pattern=r"^(?P<artist>.+?)\s+-\s+(?P<title>.+?)(?:\s*[\(\[].*)?$",
+                     artist="{artist}", title="{title}")
+
+
 def default_profile(output_dir: str) -> Profile:
-    common = ParseRule(pattern=r"^(?P<artist>.+?)\s+-\s+(?P<title>.+?)(?:\s*[\(\[].*)?$", artist="{artist}", title="{title}")
+    common = default_parse_rule()
     flipped = ParseRule(pattern=r"^(?P<title>.+?)\s+-\s+(?P<artist>.+?)\s*\|\s*Karaoke.*$", artist="{artist}", title="{title}")
     media_flipped = ParseRule(pattern=r"^(?P<title>.+?)\s+-\s+(?P<artist>.+?)\s+-\s+(?:LETRA|LYRICS|KARAOKE)\b.*$", artist="{artist}", title="{title}")
     return Profile(

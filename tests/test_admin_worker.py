@@ -96,6 +96,9 @@ def test_admin_requires_login_and_csrf_then_manages_profile_and_key(tmp_path: Pa
             assert (await client.get("/admin/api/directories", params={"path": str(tmp_path / "song.mp4")})).status_code == 400
             assert (await client.get("/admin/api/directories", params={"path": str(tmp_path / "missing")})).status_code == 404
             profile = state["profiles"][0]
+            rule = state["default_parse_rule"]
+            assert rule["artist"] == "{artist}" and rule["title"] == "{title}"
+            assert rule == profile["channels"][1]["rules"][0]
             assert (await client.put("/admin/api/profiles/karaoke", json=profile)).status_code == 403
             headers = {"X-CSRF-Token": state["csrf"]}
             bad = {**profile, "channels": [{"id": "@fake", "name": "Fake"}]}
