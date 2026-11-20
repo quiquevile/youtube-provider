@@ -183,10 +183,11 @@ def test_search_stream_deduplicates_sources_and_status_filters_since(tmp_path: P
     service = ProviderService(store)
     result = item(store)
 
-    async def fake_source(profile, query, channel_id, icon_url, video_id=None):
-        return [{**result, "iconUrl": icon_url}]
+    async def fake_worker(payload, on_event, **kwargs):
+        for _ in range(2):
+            await on_event({"event": "results", "items": [result]})
 
-    service.search_source = fake_source
+    service.run_worker = fake_worker
 
     async def exercise():
         lines = [line async for line in service.search(profile, "ABBA", "https://example.test/icon.svg")]
@@ -215,70 +216,30 @@ def test_search_stream_deduplicates_sources_and_status_filters_since(tmp_path: P
     store.close()
 
 
-def test_search_results_follow_channel_priority_even_when_lower_channel_finishes_first(tmp_path: Path):
+def test_search_streams_before_worker_finishes_and_cancels_on_close(tmp_path):
     store = Store(tmp_path)
     profile = store.profile("karaoke")
-    profile.channels = profile.channels[:2]
-    first_id, second_id = (channel.id for channel in profile.channels)
-    service = ProviderService(store)
-    finished = []
-    shared = {"id": "AAAAAAAAAAA", "title": "Shared", "artist": "Artist",
-              "source": "Top", "iconUrl": "https://example.test/icon.svg"}
-
-    async def fake_source(profile, query, channel_id, icon_url, video_id=None):
-        if channel_id == first_id:
-            await asyncio.sleep(0.02)
-            finished.append(first_id)
-            return [shared, {**shared, "id": "BBBBBBBBBBB", "title": "First only"}]
-        finished.append(second_id)
-        return [{**shared, "source": "Lower"},
-                {**shared, "id": "CCCCCCCCCCC", "title": "Second only"}]
-
-    service.search_source = fake_source
-
-    async def exercise():
-        lines = [json.loads(line) async for line in service.search(profile, "song", shared["iconUrl"])]
-        assert finished == [second_id, first_id]
-        assert [[entry["id"] for entry in batch] for batch in lines] == [
-            ["AAAAAAAAAAA", "BBBBBBBBBBB"], ["CCCCCCCCCCC"]]
-        assert lines[0][0]["source"] == "Top"
-        assert store.item("karaoke", shared["id"])["source"] == "Top"
-
-        profile.channels.reverse()
-        reordered = [json.loads(line) async for line in service.search(profile, "song", shared["iconUrl"])]
-        assert [[entry["id"] for entry in batch] for batch in reordered] == [
-            ["AAAAAAAAAAA", "CCCCCCCCCCC"], ["BBBBBBBBBBB"]]
-        assert reordered[0][0]["source"] == "Lower"
-        assert store.item("karaoke", shared["id"])["source"] == "Lower"
-
-    asyncio.run(exercise())
-    store.close()
-
-
-def test_search_keeps_results_when_one_channel_fails(tmp_path: Path):
-    store = Store(tmp_path)
-    profile = store.profile("karaoke")
-    profile.channels = profile.channels[:2]
     service = ProviderService(store)
     result = item(store)
+    stopped = asyncio.Event()
 
-    async def one_failure(profile, query, channel_id, icon_url, video_id=None):
-        if channel_id == profile.channels[0].id:
-            raise WorkerError("channel unavailable")
-        return [result]
+    async def fake_worker(payload, on_event, **kwargs):
+        try:
+            await on_event({"event": "results", "items": [result]})
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
 
-    service.search_source = one_failure
+    service.run_worker = fake_worker
 
     async def exercise():
-        found = [json.loads(line) async for line in service.search(profile, "ABBA", result["iconUrl"])]
-        assert [entry["id"] for batch in found for entry in batch] == [result["id"]]
-
-        async def all_fail(profile, query, channel_id, icon_url, video_id=None):
-            raise WorkerError("channel unavailable")
-
-        service.search_source = all_fail
-        with pytest.raises(WorkerError, match="All YouTube channel searches failed"):
-            _ = [line async for line in service.search(profile, "ABBA", result["iconUrl"])]
+        stream = service.search(profile, "ABBA", result["iconUrl"])
+        batch = json.loads(await asyncio.wait_for(anext(stream), timeout=2))
+        assert [entry["id"] for entry in batch] == [result["id"]]
+        assert store.item("karaoke", result["id"])["title"] == result["title"]
+        assert not stopped.is_set()
+        await stream.aclose()
+        assert stopped.is_set()
 
     asyncio.run(exercise())
     store.close()

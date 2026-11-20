@@ -29,7 +29,7 @@ python3 -m venv .venv
 3. Add the provider's download folder to the Karaoke Eternal library. The default is `./data/downloads/karaoke` for a local installation or `/media/karaoke` with Compose. Both services must see the files at the **same absolute path**. With two containers, mount the existing `youtube-provider-media` volume at `/media` in Karaoke Eternal.
 4. Search by artist and title in Karaoke Eternal and download a song. Its MP4 appears in the library folder. For profiles that allow any channel, the result's source shows the channel name or, if unavailable, the uploader.
 
-Search results include the original YouTube video link in the optional `detailUrl` field. Clients that support it can open the video before downloading.
+Channels are searched in parallel. Matches appear as each channel responds. Search results include the original YouTube video link in the optional `detailUrl` field. Clients that support it can open the video before downloading.
 
 **Icons with Docker.** The provider writes the bundled icon on startup. In a shared Compose project, mount the same volume at `/icons` in the provider and at `/app/assets/provider-icons:ro` in Karaoke Eternal. Set `YSP_ICON_DIR=/icons` and `YSP_ICON_BASE_URL=http://YOUR-SERVER:3754/assets/provider-icons` on the provider, using the Karaoke Eternal address your browsers can reach. Keep the internal provider URL from step 2. The included Compose file declares the volume as `provider-icons` (Docker name `youtube-provider-icons`).
 

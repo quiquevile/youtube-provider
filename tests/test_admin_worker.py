@@ -2,6 +2,7 @@ import asyncio
 import json
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import httpx
@@ -210,6 +211,7 @@ def test_worker_stdout_is_reserved_for_json_events():
 
 def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monkeypatch):
     profile = default_profile(str(tmp_path / "downloads"))
+    profile.channels = profile.channels[:1]
     allowed = profile.channels[0].id
     emitted = []
     queries = []
@@ -239,7 +241,7 @@ def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monke
 
     monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
     monkeypatch.setattr(worker, "emit", emitted.append)
-    worker.search({"profile": profile.model_dump(), "query": "Song", "channel_id": allowed})
+    worker.search({"profile": profile.model_dump(), "query": "Song"})
     assert len(emitted[0]["items"]) == 1
     assert emitted[0]["items"][0]["artist"] == "Artist"
     assert queries[0].startswith(f"https://www.youtube.com/channel/{allowed}/search?query=Song+karaoke")
@@ -273,11 +275,71 @@ def test_search_relevance_filters_unrelated_titles_and_artist_matches(tmp_path, 
 
     monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
     monkeypatch.setattr(worker, "emit", emitted.append)
-    worker.search({"profile": profile.model_dump(), "query": "your song", "channel_id": channel_id})
+    worker.search({"profile": profile.model_dump(), "query": "your song"})
     assert [item["id"] for item in emitted[-1]["items"]] == ["CCCCCCCCCCC", "fGI2vCk6ykY"]
-    worker.search({"profile": profile.model_dump(), "query": "your song elton john", "channel_id": channel_id})
+    worker.search({"profile": profile.model_dump(), "query": "your song elton john"})
     assert [item["id"] for item in emitted[-1]["items"]] == ["fGI2vCk6ykY"]
     assert emitted[-1]["items"][0]["artist"] == "Elton John"
+
+
+def test_last_preset_channel_can_emit_while_earlier_channels_are_blocked(tmp_path, monkeypatch):
+    profile = default_profile(str(tmp_path))
+    last = profile.channels[-1]
+    release = threading.Event()
+    emitted = []
+
+    def lookup(profile, query, channel, direct_id):
+        if channel.id != last.id and not release.wait(timeout=2):
+            raise TimeoutError("still waiting for the last channel")
+        return [{"source": channel.name}]
+
+    def collect(event):
+        emitted.extend(item["source"] for item in event["items"])
+        release.set()
+
+    monkeypatch.setattr(worker, "_search_items", lookup)
+    monkeypatch.setattr(worker, "emit", collect)
+    worker.search({"profile": profile.model_dump(), "query": "Freya Skye"})
+    assert emitted[0] == last.name
+    assert sorted(emitted) == sorted(channel.name for channel in profile.channels)
+
+
+def test_worker_preserves_partial_matches_and_reports_total_failure(tmp_path, monkeypatch):
+    profile = default_profile(str(tmp_path))
+    profile.channels = profile.channels[:2]
+    healthy = profile.channels[-1].id
+    emitted = []
+
+    def lookup(profile, query, channel, direct_id):
+        if channel.id != healthy:
+            raise RuntimeError("YouTube unavailable")
+        return [{"source": channel.name}]
+
+    monkeypatch.setattr(worker, "_search_items", lookup)
+    monkeypatch.setattr(worker, "emit", emitted.append)
+    request = {"profile": profile.model_dump(), "query": "ABBA"}
+    worker.search(request)
+    assert emitted == [{"event": "results", "items": [{"source": profile.channels[-1].name}]}]
+    healthy = None
+    with pytest.raises(RuntimeError, match="All YouTube channel searches failed"):
+        worker.search(request)
+
+
+def test_large_profiles_search_every_channel_without_fixed_start_priority(tmp_path, monkeypatch):
+    profile = default_profile(str(tmp_path))
+    profile.channels = profile.channels[:3]
+    started = []
+
+    def lookup(profile, query, channel, direct_id):
+        started.append(channel.id)
+        return []
+
+    monkeypatch.setattr(worker, "MAX_CHANNEL_SEARCHES", 1)
+    monkeypatch.setattr(worker.random, "shuffle", list.reverse)
+    monkeypatch.setattr(worker, "_search_items", lookup)
+    monkeypatch.setattr(worker, "emit", lambda event: None)
+    worker.search({"profile": profile.model_dump(), "query": "Freya Skye"})
+    assert started == [channel.id for channel in reversed(profile.channels)]
 
 
 def test_search_relevance_normalizes_accents_and_whole_words():
@@ -332,9 +394,9 @@ def test_search_reports_top_level_youtube_failure_instead_of_empty_results(tmp_p
             return None
 
     monkeypatch.setattr(worker.yt_dlp, "YoutubeDL", FakeYdl)
+    profile.channels = profile.channels[:1]
     with pytest.raises(RuntimeError, match="unavailable"):
-        worker.search({"profile": profile.model_dump(), "query": "your song",
-                       "channel_id": profile.channels[0].id})
+        worker.search({"profile": profile.model_dump(), "query": "your song"})
 
 
 def test_updater_switches_only_after_verification(tmp_path):

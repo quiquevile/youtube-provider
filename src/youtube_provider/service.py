@@ -176,54 +176,43 @@ class ProviderService:
                 self.processes.pop(job_key, None)
             await stderr_task
 
-    async def search_source(self, profile: Profile, query: str, channel_id: str | None,
-                            icon_url: str, video_id: str | None = None) -> list[dict]:
-        found: list[dict] = []
+    async def search(self, profile: Profile, query: str, icon_url: str):
+        batches: asyncio.Queue[list[dict] | None] = asyncio.Queue()
+        seen: set[str] = set()
 
         async def collect(event: dict) -> None:
-            if event.get("event") != "results" or not isinstance(event.get("items"), list):
-                return
-            for raw in event["items"]:
-                if not isinstance(raw, dict) or not VIDEO_ID.fullmatch(str(raw.get("id", ""))):
-                    continue
-                item = {**raw, "iconUrl": icon_url}
-                if item.get("duration") is None:
-                    item.pop("duration", None)
-                found.append(item)
+            if event.get("event") == "results" and isinstance(event.get("items"), list):
+                batches.put_nowait(event["items"])
 
-        async with self.search_capacity:
-            await self.run_worker({"action": "search", "profile": profile.model_dump(), "query": query,
-                                   "channel_id": channel_id, "video_id": video_id}, collect, timeout=90)
-        return found
+        async def run() -> None:
+            try:
+                async with self.search_capacity:
+                    await self.run_worker({"action": "search", "profile": profile.model_dump(),
+                                           "query": query, "video_id": video_id_from_query(query)}, collect, timeout=90)
+            finally:
+                batches.put_nowait(None)
 
-    async def search(self, profile: Profile, query: str, icon_url: str):
-        direct_id = video_id_from_query(query)
-        channels = [None] if direct_id or not profile.channels else [channel.id for channel in profile.channels]
-        seen: set[str] = set()
-        tasks = [asyncio.create_task(self.search_source(profile, query, channel_id, icon_url, direct_id))
-                 for channel_id in channels]
-        successful = 0
+        task = asyncio.create_task(run())
         try:
-            for task in tasks:
-                try:
-                    items = await task
-                except Exception:
-                    continue
-                successful += 1
+            while (batch := await batches.get()) is not None:
                 unique = []
-                for item in items:
-                    if item["id"] not in seen:
-                        seen.add(item["id"])
-                        self.store.put_item(profile.slug, item)
-                        unique.append(item)
+                for raw in batch:
+                    if not isinstance(raw, dict) or not VIDEO_ID.fullmatch(str(raw.get("id", ""))):
+                        continue
+                    if raw["id"] in seen:
+                        continue
+                    seen.add(raw["id"])
+                    item = {**raw, "iconUrl": icon_url}
+                    if item.get("duration") is None:
+                        item.pop("duration", None)
+                    self.store.put_item(profile.slug, item)
+                    unique.append(item)
                 for line in ndjson_lines(unique):
                     yield line
-            if not successful:
-                raise WorkerError("All YouTube channel searches failed")
+            await task
         finally:
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     def fetch(self, profile: Profile, key_id: str, item: dict, timestamp: float, meta: dict | None) -> None:
         job_key = (profile.slug, key_id, item["id"])

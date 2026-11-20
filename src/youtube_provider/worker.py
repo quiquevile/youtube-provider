@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
 import sys
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TextIO
 from urllib.parse import urlencode
@@ -20,6 +22,7 @@ from .quality import select_format
 
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+MAX_CHANNEL_SEARCHES = 16
 _protocol_output: TextIO | None = None
 
 
@@ -98,14 +101,7 @@ def relevance(query: str, artist: str, title: str, search_terms: list[str]) -> i
     return 1
 
 
-def search(request: dict) -> None:
-    profile = Profile.model_validate(request["profile"])
-    query = str(request["query"]).strip()
-    requested_channel = request.get("channel_id")
-    channel = _channel(profile, requested_channel) if requested_channel else None
-    if requested_channel and not channel:
-        raise ValueError("unknown channel")
-    direct_id = request.get("video_id")
+def _search_items(profile: Profile, query: str, channel: Channel | None, direct_id: str | None) -> list[dict]:
     results: list[tuple[int, dict]] = []
     candidate_count = min(100, profile.search_count * 3)
     with yt_dlp.YoutubeDL(_ydl_options(extract_flat="in_playlist", ignoreerrors=True,
@@ -162,7 +158,34 @@ def search(request: dict) -> None:
                 result["duration"] = float(duration)
             results.append((score, result))
     results.sort(key=lambda pair: -pair[0])
-    emit({"event": "results", "items": [item for _, item in results[:profile.search_count]]})
+    return [item for _, item in results[:profile.search_count]]
+
+
+def search(request: dict) -> None:
+    profile = Profile.model_validate(request["profile"])
+    query = str(request["query"]).strip()
+    direct_id = request.get("video_id")
+    if direct_id or len(profile.channels) <= 1:
+        channel = profile.channels[0] if profile.channels and not direct_id else None
+        emit({"event": "results", "items": _search_items(profile, query, channel, direct_id)})
+        return
+
+    channels = profile.channels.copy()
+    if len(channels) > MAX_CHANNEL_SEARCHES:
+        # Give every channel a chance at the first slots on large profiles.
+        random.shuffle(channels)
+    with ThreadPoolExecutor(max_workers=MAX_CHANNEL_SEARCHES) as pool:
+        searches = [pool.submit(_search_items, profile, query, channel, None) for channel in channels]
+        successful = False
+        for future in as_completed(searches):
+            try:
+                items = future.result()
+            except Exception:
+                continue
+            successful = True
+            emit({"event": "results", "items": items})
+        if not successful:
+            raise RuntimeError("All YouTube channel searches failed")
 
 
 def download(request: dict) -> None:

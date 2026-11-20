@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Python packaging now requires Pydantic 2 explicitly, including on ARM64 builds.
 - README now states that Karaoke Eternal karaoke integration is the project's current supported use case and explains its shared-media requirement.
 - Restricted searches now query each YouTube channel directly and filter/rank results against the requested artist and title, improving recall and removing unrelated partial matches.
-- Search results follow the configured channel order, with move-up and move-down controls in administration.
+- Channel searches run in parallel and stream matches as each channel responds. Channels can still be reordered in administration.
 - New downloads use clean artist and title filenames without YouTube IDs. Colliding names receive a numbered suffix.
 - Client API keys can use their own output directory; by default they inherit the profile directory. Existing databases are migrated automatically.
 
