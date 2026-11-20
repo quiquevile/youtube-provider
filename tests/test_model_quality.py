@@ -14,8 +14,8 @@ def profile(tmp_path: Path) -> Profile:
 def test_default_profile_has_strict_curated_channels(tmp_path):
     configured = profile(tmp_path)
     assert configured.slug == "karaoke"
-    assert len(configured.channels) == 10
-    assert len({channel.id for channel in configured.channels}) == 10
+    assert len(configured.channels) == 13
+    assert len({channel.id for channel in configured.channels}) == 13
     assert configured.quality_order == [1080, 720, 480]
 
 
@@ -45,6 +45,23 @@ def test_channel_rules_override_generic_artist_title(tmp_path):
     ("UCkQmmoZPHkgj2J5YxyoxRRA", "El Pele y Vicente Amigo – Llámale amor (Rumba) (Kar@ke)",
      "El Pele y Vicente Amigo", "Llámale amor (Rumba)"),
     ("UCkQmmoZPHkgj2J5YxyoxRRA", "Jarabe de palo - Grita (Kar@ke)", "Jarabe de palo", "Grita"),
+    ("UCi-2SWwS0zvyO8tzp3JAC8w", "Content Karaoke - Bo Burnham Instrumental Lower Higher Female Original Key",
+     "Bo Burnham", "Content"),
+    ("UCi-2SWwS0zvyO8tzp3JAC8w", "Olivia Rodrigo - take me home (4 christmas) Karaoke Instrumental Lower Higher Male & Original Key",
+     "Olivia Rodrigo", "take me home (4 christmas)"),
+    ("UCi-2SWwS0zvyO8tzp3JAC8w", "Eminem - Walk on Water ft  Beyonce Karaoke Version Original Key C Instrumental Lyrics HD Best",
+     "Eminem", "Walk on Water ft Beyonce"),
+    ("UCi-2SWwS0zvyO8tzp3JAC8w", "Michael Bublé It's Beginning To Look A Lot Like Christmas Karaoke Instrumental",
+     "Karaoke All Keys", "Michael Bublé It's Beginning To Look A Lot Like Christmas"),
+    ("UCIPbpDec1494fbnpXGJ134g", "Freya Skye - Effortless (LOWER KEY KARAOKE) Live Version",
+     "Freya Skye", "Effortless Live Version"),
+    ("UCIPbpDec1494fbnpXGJ134g", "MALE KEY | BCL - 12 TAHUN TERINDAH (KARAOKE)", "BCL", "12 TAHUN TERINDAH"),
+    ("UCIPbpDec1494fbnpXGJ134g", "Heart - Alone [Karaoke] LOWER KEY", "Heart", "Alone"),
+    ("UCIPbpDec1494fbnpXGJ134g", "K/DA - FIRESTARTER | Karaoke Instrumental", "K/DA", "FIRESTARTER"),
+    ("UCIPbpDec1494fbnpXGJ134g", 'Alien Stage - AURA! Karaoke Instrumental (VIVINOS - AAHS Sub : MIZI "School Festival".ver)',
+     "Alien Stage", "AURA!"),
+    ("UCcKG2TEINM17te8usbQ2xrw", "Maria Becerra - Tú Sin Yo (Karaoke)", "Maria Becerra", "Tú Sin Yo"),
+    ("UCcKG2TEINM17te8usbQ2xrw", "King Von Ft. Lil Durk - All These (Karaoke)", "King Von Ft. Lil Durk", "All These"),
 ])
 def test_new_karaoke_channel_rules(tmp_path, channel_id, raw, artist, title):
     channel = next(channel for channel in profile(tmp_path).channels if channel.id == channel_id)

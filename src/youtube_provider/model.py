@@ -191,5 +191,21 @@ def default_profile(output_dir: str) -> Profile:
                 ParseRule(pattern=r"^(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)\s*\(Kar@ke\)$",
                           artist="{artist}", title="{title}"),
             ]),
+            Channel(id="UCi-2SWwS0zvyO8tzp3JAC8w", name="Karaoke All Keys", rules=[
+                ParseRule(pattern=r"^(?P<title>.+?)\s+Karaoke\s+[-–—]\s+(?P<artist>.+?)\s+Instrumental\b.*$",
+                          artist="{artist}", title="{title}"),
+                ParseRule(pattern=r"^(?:(?P<artist>.+?)\s+[-–—]\s+)?(?P<title>.+?)\s+Karaoke\s+(?:Instrumental|Version)\b.*$",
+                          artist="{artist}", title="{title}"),
+            ]),
+            Channel(id="UCIPbpDec1494fbnpXGJ134g", name="Just In Coustic", rules=[
+                ParseRule(pattern=r"^(?:(?:male|female|lower|higher|original)\s+key\s*\|\s*)?"
+                                  r"(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)"
+                                  r"(?:\s*\|\s*Karaoke\b.*|\s+Karaoke\s+.*|\s+(?:male|female|lower|higher|original)\s+key\b.*)?$",
+                          artist="{artist}", title="{title}"),
+            ]),
+            Channel(id="UCcKG2TEINM17te8usbQ2xrw", name="JoeRaffe Karaoke", rules=[
+                ParseRule(pattern=r"^(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)\s*\(Karaoke\)$",
+                          artist="{artist}", title="{title}"),
+            ]),
         ],
     )
