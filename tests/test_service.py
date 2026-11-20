@@ -191,7 +191,8 @@ def test_search_stream_deduplicates_sources_and_status_filters_since(tmp_path: P
     async def exercise():
         lines = [line async for line in service.search(profile, "ABBA", "https://example.test/icon.svg")]
         assert len(lines) == 1
-        assert json.loads(lines[0]) == [public_item({**result, "iconUrl": "https://example.test/icon.svg"})]
+        assert json.loads(lines[0]) == [{**public_item(result), "iconUrl": "https://example.test/icon.svg",
+                                         "detailUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}]
         service.publish("karaoke", key_id, {**public_item(result), "status": "pending", "progress": 0, "timestamp": 5})
         app = create_api(service)
         route = next(route for route in app.routes if getattr(route, "path", "") == "/profiles/{slug}/api/song/v0/status")

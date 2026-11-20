@@ -116,11 +116,10 @@ def test_auth_discovery_fetch_validation_and_consumer_isolation(tmp_path: Path, 
     # Keep the HTTP test focused on protocol behavior without starting a network worker.
     service._download = lambda *args: __import__("asyncio").sleep(0)
 
-    async def fake_search(profile, query, icon_url):
-        yield json.dumps([{**{key: item[key] for key in ("id", "title", "artist", "source")},
-                           "iconUrl": icon_url}]).encode() + b"\n"
+    async def fake_worker(payload, on_event, **kwargs):
+        await on_event({"event": "results", "items": [item]})
 
-    service.search = fake_search
+    service.run_worker = fake_worker
     async def exercise():
         icon_dir = tmp_path / "shared-icons"
         icon_dir.mkdir()
@@ -140,6 +139,10 @@ def test_auth_discovery_fetch_validation_and_consumer_isolation(tmp_path: Path, 
             assert found.status_code == 200
             assert found.headers["content-type"].startswith("application/x-ndjson")
             assert json.loads(found.text)[0]["title"] == "Song"
+            assert json.loads(found.text)[0]["detailUrl"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            direct = await client.post(base + "/song/v0/search", headers=headers,
+                                       json={"query": "https://youtu.be/dQw4w9WgXcQ?t=30"})
+            assert json.loads(direct.text)[0]["detailUrl"] == json.loads(found.text)[0]["detailUrl"]
             icon = await client.get("/icons/youtube.svg")
             assert icon.status_code == 200 and icon.headers["content-type"] == "image/svg+xml"
             assert icon.content.startswith(b"<svg") and (icon_dir / "youtube.svg").read_bytes() == icon.content
@@ -170,6 +173,8 @@ def test_ndjson_splits_at_utf8_limit_and_rejects_lookalike_urls():
     lines = ndjson_lines(items)
     assert len(lines) > 1
     assert all(len(line) <= 65536 for line in lines)
-    assert sum(len(json.loads(line)) for line in lines) == 100
+    assert [result["detailUrl"] for line in lines for result in json.loads(line)] == [
+        f"https://www.youtube.com/watch?v={item['id']}" for item in items
+    ]
     assert video_id_from_query("https://youtube.com.evil.test/watch?v=dQw4w9WgXcQ") is None
     assert video_id_from_query("https://youtu.be/dQw4w9WgXcQ") == "dQw4w9WgXcQ"

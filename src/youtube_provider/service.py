@@ -58,12 +58,14 @@ def ndjson_lines(items: list[dict]) -> list[bytes]:
     lines: list[bytes] = []
     batch: list[dict] = []
     for item in items:
-        candidate = batch + [public_item(item)]
+        result = public_item(item)
+        result["detailUrl"] = f"https://www.youtube.com/watch?v={item['id']}"
+        candidate = batch + [result]
         encoded = json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
         if len(encoded) > 65536:
             if batch:
                 lines.append(json.dumps(batch, ensure_ascii=False, separators=(",", ":")).encode() + b"\n")
-            batch = [public_item(item)]
+            batch = [result]
             if len(json.dumps(batch, ensure_ascii=False, separators=(",", ":")).encode() + b"\n") > 65536:
                 batch = []
         else:
