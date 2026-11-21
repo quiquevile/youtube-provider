@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Artist or title searches can find videos omitted by YouTube's channel search, including in profiles without default search terms.
 - Unrestricted profiles use the video's uploader as the source when YouTube omits the channel name.
 - First-time admin password setup and sign-in work when the browser opens the provider by its LAN address over HTTP.
 - A failed channel search no longer discards matches from other channels, and a top-level YouTube failure no longer appears as an empty successful search.

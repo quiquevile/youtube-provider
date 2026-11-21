@@ -247,6 +247,31 @@ def test_worker_rejects_channel_lookalikes_and_uses_channel_rule(tmp_path, monke
     assert queries[0].startswith(f"https://www.youtube.com/channel/{allowed}/search?query=Song+karaoke")
 
 
+@pytest.mark.parametrize("channel_has_unrelated_video", [False, True])
+def test_artist_search_recovers_verified_channel_matches_without_default_terms(tmp_path, monkeypatch, channel_has_unrelated_video):
+    profile = default_profile(str(tmp_path))
+    profile.search_terms = []
+    channel = next(c for c in profile.channels if c.name == "Just In Coustic")
+    profile.channels = [channel]
+    hit = {"id": "9vz6YB8kAmU", "title": "Freya Skye - CRUSHED (Karaoke) Live Version", "channel_id": channel.id}
+    unrelated = {**hit, "id": "AAAAAAAAAAA", "title": "Another Artist - Another Song"}
+    requests = []
+
+    def extract(ydl, source, download=False):
+        requests.append(source)
+        if "/search?query=" in source:
+            return {"entries": [unrelated] if channel_has_unrelated_video else []}
+        return {"entries": [unrelated, {**hit, "id": "BBBBBBBBBBB", "channel_id": "UCxxxxxxxxxxxxxxxxxxxxxx",
+                                        "channel": channel.name}, hit]}
+
+    monkeypatch.setattr(worker.yt_dlp.YoutubeDL, "extract_info", extract)
+    matches = worker._search_items(profile, "freya skye", channel, None)
+    assert requests == [f"https://www.youtube.com/channel/{channel.id}/search?query=freya+skye",
+                        "ytsearch45:freya skye Just In Coustic"]
+    assert [(i["id"], i["artist"], i["title"]) for i in matches] == [
+        ("9vz6YB8kAmU", "Freya Skye", "CRUSHED Live Version")]
+
+
 def test_search_relevance_filters_unrelated_titles_and_artist_matches(tmp_path, monkeypatch):
     profile = default_profile(str(tmp_path / "downloads"))
     profile.channels = profile.channels[:1]

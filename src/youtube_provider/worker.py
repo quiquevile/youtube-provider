@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import unicodedata
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TextIO
@@ -101,64 +102,75 @@ def relevance(query: str, artist: str, title: str, search_terms: list[str]) -> i
     return 1
 
 
-def _search_items(profile: Profile, query: str, channel: Channel | None, direct_id: str | None) -> list[dict]:
+def _matching_items(ydl: yt_dlp.YoutubeDL, entries: Iterable[dict | None], profile: Profile,
+                    query: str, channel: Channel | None, *, direct: bool = False) -> list[dict]:
     results: list[tuple[int, dict]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        video_id = str(entry.get("id") or "")
+        if not VIDEO_ID.fullmatch(video_id):
+            continue
+        actual_id = entry.get("channel_id")
+        if profile.channels and not actual_id:
+            # Flat search data can omit the permanent channel id. Hydrate it;
+            # never trust a display name to enforce the allowlist.
+            try:
+                entry = _video_info(ydl, video_id)
+            except Exception:
+                continue
+            actual_id = entry.get("channel_id")
+        matched_channel = _channel(profile, actual_id)
+        if profile.channels and not matched_channel:
+            continue
+        if channel and actual_id != channel.id:
+            continue
+        title = str(entry.get("title") or "").strip()
+        if not title:
+            continue
+        artist, song = parse_metadata(title, matched_channel)
+        score = 1 if direct else relevance(query, artist, song, profile.search_terms)
+        if not score:
+            continue
+        duration = entry.get("duration")
+        source_name = matched_channel.name if matched_channel else (
+            str(entry.get("channel") or "").strip() or str(entry.get("uploader") or "").strip() or "YouTube"
+        )
+        result = {
+            "id": video_id, "title": song[:1024], "artist": artist[:1024],
+            "source": source_name[:1024],
+            "channel_id": actual_id, "raw_title": title[:1024],
+        }
+        if isinstance(duration, (int, float)) and duration > 0:
+            result["duration"] = float(duration)
+        results.append((score, result))
+    results.sort(key=lambda pair: -pair[0])
+    return [item for _, item in results[:profile.search_count]]
+
+
+def _search_items(profile: Profile, query: str, channel: Channel | None, direct_id: str | None) -> list[dict]:
     candidate_count = min(100, profile.search_count * 3)
     with yt_dlp.YoutubeDL(_ydl_options(extract_flat="in_playlist", ignoreerrors=True,
                                        skip_download=True, playlistend=candidate_count)) as ydl:
         if direct_id:
-            entries = [_video_info(ydl, str(direct_id))]
-        else:
-            terms = search_query(query, profile.search_terms)
-            if channel:
-                source = f"https://www.youtube.com/channel/{channel.id}/search?{urlencode({'query': terms})}"
-            else:
-                source = f"ytsearch{candidate_count}:{terms}"
+            entry = _video_info(ydl, direct_id)
+            return _matching_items(ydl, [entry], profile, query, channel, direct=True)
+
+        terms = search_query(query, profile.search_terms)
+        sources = []
+        if channel:
+            sources.append(f"https://www.youtube.com/channel/{channel.id}/search?{urlencode({'query': terms})}")
+            terms = search_query(terms, [channel.name])
+        sources.append(f"ytsearch{candidate_count}:{terms}")
+
+        for source in sources:
             listing = ydl.extract_info(source, download=False)
             if not isinstance(listing, dict):
                 raise RuntimeError("YouTube search is unavailable")
-            entries = list(listing.get("entries") or [])
-        for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            video_id = str(entry.get("id") or "")
-            if not VIDEO_ID.fullmatch(video_id):
-                continue
-            actual_id = entry.get("channel_id")
-            if profile.channels and (not actual_id or not _channel(profile, actual_id)):
-                # Flat search data can omit the permanent channel id. Hydrate it;
-                # never trust a display name to enforce the allowlist.
-                try:
-                    entry = _video_info(ydl, video_id)
-                except Exception:
-                    continue
-                actual_id = entry.get("channel_id")
-            if profile.channels and not _channel(profile, actual_id):
-                continue
-            if channel and actual_id != channel.id:
-                continue
-            title = str(entry.get("title") or "").strip()
-            if not title:
-                continue
-            matched_channel = _channel(profile, actual_id)
-            artist, song = parse_metadata(title, matched_channel)
-            score = 1 if direct_id else relevance(query, artist, song, profile.search_terms)
-            if not score:
-                continue
-            duration = entry.get("duration")
-            source_name = matched_channel.name if matched_channel else (
-                str(entry.get("channel") or "").strip() or str(entry.get("uploader") or "").strip() or "YouTube"
-            )
-            result = {
-                "id": video_id, "title": song[:1024], "artist": artist[:1024],
-                "source": source_name[:1024],
-                "channel_id": actual_id, "raw_title": title[:1024],
-            }
-            if isinstance(duration, (int, float)) and duration > 0:
-                result["duration"] = float(duration)
-            results.append((score, result))
-    results.sort(key=lambda pair: -pair[0])
-    return [item for _, item in results[:profile.search_count]]
+            matches = _matching_items(ydl, listing.get("entries") or [], profile, query, channel)
+            if matches:
+                return matches
+        return []
 
 
 def search(request: dict) -> None:
