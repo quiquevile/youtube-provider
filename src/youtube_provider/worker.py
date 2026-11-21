@@ -76,21 +76,12 @@ def _contains(words: list[str], phrase: list[str]) -> bool:
                for index in range(len(words) - len(phrase) + 1))
 
 
-def relevance(query: str, artist: str, title: str, search_terms: list[str]) -> int:
-    """Require whole query words in parsed metadata, then rank closer matches."""
-    requested = _words(query)
-    for term in search_terms:
-        phrase = _words(term)
-        if phrase and _contains(requested, phrase):
-            start = next(index for index in range(len(requested) - len(phrase) + 1)
-                         if requested[index:index + len(phrase)] == phrase)
-            del requested[start:start + len(phrase)]
+def _match_score(requested: list[str], artist: str, title: str) -> int:
+    """Rank accepted videos by how closely their artist and song match the query."""
     if not requested:
         return 1
     artist_words, title_words = _words(artist), _words(title)
     combined = artist_words + title_words
-    if not set(requested).issubset(combined):
-        return 0
     if requested == title_words:
         return 5
     if requested in (combined, title_words + artist_words):
@@ -105,6 +96,8 @@ def relevance(query: str, artist: str, title: str, search_terms: list[str]) -> i
 def _matching_items(ydl: yt_dlp.YoutubeDL, entries: Iterable[dict | None], profile: Profile,
                     query: str, channel: Channel | None, *, direct: bool = False) -> list[dict]:
     results: list[tuple[int, dict]] = []
+    requested = [] if direct else _words(query)
+    required_words = set(requested)
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -125,13 +118,11 @@ def _matching_items(ydl: yt_dlp.YoutubeDL, entries: Iterable[dict | None], profi
             continue
         if channel and actual_id != channel.id:
             continue
-        title = str(entry.get("title") or "").strip()
-        if not title:
+        raw_title = str(entry.get("title") or "").strip()
+        if not raw_title or (required_words and not required_words.issubset(_words(raw_title))):
             continue
-        artist, song = parse_metadata(title, matched_channel)
-        score = 1 if direct else relevance(query, artist, song, profile.search_terms)
-        if not score:
-            continue
+        artist, song = parse_metadata(raw_title, matched_channel)
+        score = _match_score(requested, artist, song)
         duration = entry.get("duration")
         source_name = matched_channel.name if matched_channel else (
             str(entry.get("channel") or "").strip() or str(entry.get("uploader") or "").strip() or "YouTube"
@@ -139,7 +130,7 @@ def _matching_items(ydl: yt_dlp.YoutubeDL, entries: Iterable[dict | None], profi
         result = {
             "id": video_id, "title": song[:1024], "artist": artist[:1024],
             "source": source_name[:1024],
-            "channel_id": actual_id, "raw_title": title[:1024],
+            "channel_id": actual_id, "raw_title": raw_title[:1024],
         }
         if isinstance(duration, (int, float)) and duration > 0:
             result["duration"] = float(duration)

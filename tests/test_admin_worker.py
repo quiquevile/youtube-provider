@@ -367,13 +367,26 @@ def test_large_profiles_search_every_channel_without_fixed_start_priority(tmp_pa
     assert started == [channel.id for channel in reversed(profile.channels)]
 
 
-def test_search_relevance_normalizes_accents_and_whole_words():
-    assert worker.relevance("cancion karaoke", "Mecano", "Canción", ["karaoke"]) == 5
-    assert worker.relevance("your song elton john", "Elton John", "Your Song", ["karaoke"]) == 4
-    assert worker.relevance("elton john your song", "Elton John", "Your Song", ["karaoke"]) == 4
-    assert worker.relevance("your song", "Elton John", "Your Song", []) == 5
-    assert worker.relevance("song", "Elton John", "Songs", []) == 0
-    assert worker.relevance("your song", "Neil Diamond", "I Am... I Said", []) == 0
+@pytest.mark.parametrize("terms", [[], ["karaoke"]])
+def test_explicit_search_words_must_match_the_original_video_title(tmp_path, terms):
+    profile = default_profile(str(tmp_path))
+    profile.search_terms = terms
+    channel = next(c for c in profile.channels if c.name == "Just In Coustic")
+    tagged = {"id": "9vz6YB8kAmU", "channel_id": channel.id,
+              "title": "Freya Skye - CRUSHED (Karaoke) Live Version"}
+    untagged = {**tagged, "id": "AAAAAAAAAAA", "title": "Freya Skye - CRUSHED Live Version"}
+    similar = {**tagged, "id": "BBBBBBBBBBB", "title": "Freya Skyes - CRUSHED (Karaoke) Live Version"}
+    matches = worker._matching_items(None, [untagged, similar, tagged], profile, "FREYA skye karaoke", channel)
+    assert [(m["id"], m["artist"], m["title"]) for m in matches] == [
+        ("9vz6YB8kAmU", "Freya Skye", "CRUSHED Live Version")]
+
+
+def test_search_preserves_accent_normalization_and_ranks_exact_song_first(tmp_path):
+    profile = default_profile(str(tmp_path))
+    exact = {"id": "AAAAAAAAAAA", "channel_id": profile.channels[1].id, "title": "Mecano - Canción"}
+    longer = {**exact, "id": "BBBBBBBBBBB", "title": "Mecano - Una canción más"}
+    matches = worker._matching_items(None, [longer, exact], profile, "cancion", profile.channels[1])
+    assert [m["id"] for m in matches] == [exact["id"], longer["id"]]
 
 
 def test_direct_video_lookup_bypasses_text_filter_but_keeps_channel_allowlist(tmp_path, monkeypatch):
